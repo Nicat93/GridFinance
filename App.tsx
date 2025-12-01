@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus } from './types';
 import TransactionGrid from './components/TransactionGrid';
@@ -129,11 +130,7 @@ export default function App() {
   }, [transactions, plans, cycleStartDay, deletedIds]);
 
   /**
-   * Core Sync Function
-   * 1. Pulls remote data
-   * 2. Merges with local data (resolving conflicts via timestamps)
-   * 3. Pushes merged result back to server
-   * 4. Updates local state
+   * Optimized Delta Sync Function
    */
   const triggerSync = useCallback(async () => {
       if (!syncConfig.enabled || !syncConfig.syncId) return;
@@ -143,43 +140,69 @@ export default function App() {
       setSyncStatus('syncing');
       
       const currentLocalState = stateRef.current;
+      const lastSyncedAt = syncConfig.lastSyncedAt || 0;
+      const syncStartTime = Date.now();
 
       try {
-          // 1. Fetch
-          const remoteData = await SupabaseService.fetchRemoteData(syncConfig);
+          // 1. PULL Deltas (Only items changed on server since lastSyncedAt)
+          const remoteChanges = await SupabaseService.pullChanges(syncConfig, lastSyncedAt);
           
-          let currentData: BackupData = { 
-              transactions: currentLocalState.transactions, 
-              plans: currentLocalState.plans, 
-              cycleStartDay: currentLocalState.cycleStartDay, 
-              lastModified: Date.now(), 
-              deletedIds: currentLocalState.deletedIds 
-          };
-          let mergedData = currentData;
+          let mergedTransactions = currentLocalState.transactions;
+          let mergedPlans = currentLocalState.plans;
+          let mergedDeletedIds = currentLocalState.deletedIds;
+          let mergedCycleDay = currentLocalState.cycleStartDay;
 
-          // 2. Merge
-          if (remoteData) {
-              mergedData = SupabaseService.mergeData(currentData, remoteData);
+          // 2. MERGE
+          if (remoteChanges) {
+              const merged = SupabaseService.mergeDeltas(
+                  { 
+                      transactions: currentLocalState.transactions, 
+                      plans: currentLocalState.plans, 
+                      cycleStartDay: currentLocalState.cycleStartDay, 
+                      deletedIds: currentLocalState.deletedIds,
+                      lastModified: 0 
+                  }, 
+                  remoteChanges
+              );
               
-              // 3. Update Local State (Only if meaningful change occurred to prevent loops)
-              // We compare JSON stringified versions of the actual data content to avoid unnecessary updates
+              mergedTransactions = merged.transactions;
+              mergedPlans = merged.plans;
+              mergedDeletedIds = merged.deletedIds;
+              mergedCycleDay = merged.cycleStartDay;
+
+              // Update State if changed
               const hasChanges = 
-                  JSON.stringify(mergedData.transactions) !== JSON.stringify(currentData.transactions) ||
-                  JSON.stringify(mergedData.plans) !== JSON.stringify(currentData.plans) ||
-                  mergedData.cycleStartDay !== currentData.cycleStartDay ||
-                  JSON.stringify(mergedData.deletedIds) !== JSON.stringify(currentData.deletedIds);
+                  mergedTransactions.length !== currentLocalState.transactions.length ||
+                  JSON.stringify(mergedTransactions) !== JSON.stringify(currentLocalState.transactions) ||
+                  JSON.stringify(mergedPlans) !== JSON.stringify(currentLocalState.plans) ||
+                  mergedCycleDay !== currentLocalState.cycleStartDay;
 
               if (hasChanges) {
-                  setTransactions(mergedData.transactions);
-                  setPlans(mergedData.plans);
-                  setCycleStartDay(mergedData.cycleStartDay);
-                  if (mergedData.deletedIds) setDeletedIds(mergedData.deletedIds);
+                  setTransactions(mergedTransactions);
+                  setPlans(mergedPlans);
+                  setCycleStartDay(mergedCycleDay);
+                  setDeletedIds(mergedDeletedIds);
               }
           }
 
-          // 4. Push
-          const success = await SupabaseService.pushRemoteData(syncConfig, mergedData);
-          setSyncStatus(success ? 'synced' : 'error');
+          // 3. PUSH Deltas (Only items changed locally since lastSyncedAt)
+          const success = await SupabaseService.pushChanges(
+              syncConfig, 
+              mergedTransactions, 
+              mergedPlans, 
+              mergedDeletedIds, 
+              mergedCycleDay,
+              lastSyncedAt
+          );
+
+          if (success) {
+            setSyncStatus('synced');
+            // Update timestamp so next sync only fetches updates after this point
+            setSyncConfig(prev => ({ ...prev, lastSyncedAt: syncStartTime }));
+          } else {
+            setSyncStatus('error');
+          }
+
       } catch (e) {
           console.error("Sync loop error", e);
           setSyncStatus('error');
@@ -195,7 +218,6 @@ export default function App() {
           SupabaseService.initSupabase(syncConfig.supabaseUrl, syncConfig.supabaseKey);
           
           // Trigger initial sync after initialization
-          // We do this immediately on mount/enable to ensure data is fresh
           triggerSync();
       } else {
           setSyncStatus('offline');
