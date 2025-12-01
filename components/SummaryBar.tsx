@@ -36,11 +36,12 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus }) => 
 
   const handleContainerClick = () => {
     try {
+        const input = dateInputRef.current;
         // Explicitly open the picker (works in Chrome/Edge/Firefox/Safari 16+)
-        if (dateInputRef.current && 'showPicker' in dateInputRef.current) {
-            (dateInputRef.current as any).showPicker();
-        } else {
-             dateInputRef.current?.focus();
+        if (input && 'showPicker' in input) {
+            (input as any).showPicker();
+        } else if (input) {
+             input.focus();
         }
     } catch (e) {
         console.warn("Could not open date picker:", e);
@@ -48,11 +49,11 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus }) => 
   };
 
   return (
-    <div className="sticky top-0 z-30 bg-white/95 dark:bg-black/95 backdrop-blur border-b border-gray-200 dark:border-gray-800 px-2 py-2 sm:px-4 sm:py-3 shadow-lg transition-colors">
+    <div className="sticky top-0 z-30 bg-white/95 dark:bg-black/95 backdrop-blur border-b border-gray-200 dark:border-gray-800 px-2 py-2 shadow-lg transition-colors">
       <div className="max-w-4xl mx-auto flex items-center justify-between relative">
         
         {/* Current */}
-        <div className="flex flex-col shrink-0 min-w-0">
+        <div className="flex flex-col shrink-0 min-w-0 max-w-[35%]">
             <span className="text-[9px] sm:text-[10px] text-gray-500 dark:text-gray-500 uppercase tracking-widest font-bold truncate">Current</span>
             <span className={`text-[13px] sm:text-xl font-mono font-bold leading-none tracking-tighter truncate ${snapshot.currentBalance >= 0 ? 'text-gray-900 dark:text-gray-200' : 'text-rose-600 dark:text-rose-500'}`}>
                 {formatMoney(snapshot.currentBalance)}
@@ -67,7 +68,7 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus }) => 
             >
                 {/* Visual Label */}
                 <div 
-                    className="text-[9px] sm:text-[10px] text-gray-500 dark:text-gray-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 bg-gray-100 dark:bg-gray-900/50 group-hover:bg-gray-200 dark:group-hover:bg-gray-900 border border-gray-200 dark:border-gray-800/50 group-hover:border-gray-300 dark:group-hover:border-gray-700 px-2 py-0.5 rounded transition-all mb-1 truncate max-w-[80px] sm:max-w-[140px] text-center"
+                    className="text-[9px] sm:text-[10px] text-gray-500 dark:text-gray-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 bg-gray-100 dark:bg-gray-900/50 group-hover:bg-gray-200 dark:group-hover:bg-gray-900 border border-gray-200 dark:border-gray-800/50 group-hover:border-gray-300 dark:group-hover:border-gray-700 px-2 py-0.5 rounded transition-all mb-1 truncate max-w-[100px] sm:max-w-[140px] text-center"
                 >
                     {formatDate(snapshot.periodStart)} — {formatDate(snapshot.periodEnd)}
                 </div>
@@ -107,7 +108,7 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus }) => 
         </div>
 
         {/* Projected */}
-        <div className="flex flex-col items-end shrink-0 min-w-0">
+        <div className="flex flex-col items-end shrink-0 min-w-0 max-w-[35%]">
             <span className="text-[9px] sm:text-[10px] text-indigo-500 dark:text-indigo-400 uppercase tracking-widest font-bold truncate">End Period</span>
             <span className={`text-[13px] sm:text-xl font-mono font-bold leading-none tracking-tighter truncate ${snapshot.projectedBalance >= 0 ? 'text-indigo-600 dark:text-indigo-300' : 'text-rose-500 dark:text-rose-400'}`}>
                 {formatMoney(snapshot.projectedBalance)}

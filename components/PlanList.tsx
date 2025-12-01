@@ -63,7 +63,7 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
             {/* --- Header --- */}
             <div className="flex bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400 font-mono uppercase tracking-wider text-[10px]">
                 <div className="py-1 px-1.5 border-b border-gray-200 dark:border-gray-800 font-medium flex-1">Desc</div>
-                <div className="py-1 px-1.5 border-b border-gray-200 dark:border-gray-800 font-medium text-right w-[85px] sm:w-28">Amt</div>
+                <div className="py-1 px-1.5 border-b border-gray-200 dark:border-gray-800 font-medium text-right w-[75px] sm:w-28">Amt</div>
             </div>
 
             {/* --- Body --- */}
@@ -87,7 +87,7 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
                                     <div className="text-gray-700 dark:text-gray-300 font-medium truncate text-xs sm:text-sm">{plan.description}</div>
                                     {plan.isInstallment && <span className="text-[9px] text-blue-600 dark:text-blue-500 bg-blue-100 dark:bg-blue-900/20 px-1 rounded">LOAN</span>}
                                 </div>
-                                <div className={`px-1.5 text-right w-[85px] sm:w-28 whitespace-nowrap text-[11px] sm:text-sm tracking-tighter ${plan.type === 'income' ? 'text-emerald-600 dark:text-emerald-400/80' : 'text-rose-600 dark:text-rose-400/80'}`}>
+                                <div className={`px-1.5 text-right w-[75px] sm:w-28 truncate text-[11px] sm:text-sm tracking-tighter ${plan.type === 'income' ? 'text-emerald-600 dark:text-emerald-400/80' : 'text-rose-600 dark:text-rose-400/80'}`}>
                                     {plan.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </div>
                             </div>

@@ -101,6 +101,8 @@ export default function App() {
   
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('offline');
   const syncTimeoutRef = useRef<number | null>(null);
+  const isSyncingRef = useRef(false);
+  const isFirstMount = useRef(true);
 
   // --- Effects: Persistence ---
   useEffect(() => { localStorage.setItem('transactions', JSON.stringify(transactions)); }, [transactions]);
@@ -133,6 +135,10 @@ export default function App() {
    */
   const triggerSync = useCallback(async () => {
       if (!syncConfig.enabled || !syncConfig.syncId) return;
+      if (isSyncingRef.current) return;
+      
+      isSyncingRef.current = true;
+      setSyncStatus('syncing');
       
       const currentLocalState = stateRef.current;
 
@@ -154,7 +160,7 @@ export default function App() {
               mergedData = SupabaseService.mergeData(currentData, remoteData);
               
               // 3. Update Local State (Only if meaningful change occurred to prevent loops)
-              // We compare JSON stringified versions of the actual data content
+              // We compare JSON stringified versions of the actual data content to avoid unnecessary updates
               const hasChanges = 
                   JSON.stringify(mergedData.transactions) !== JSON.stringify(currentData.transactions) ||
                   JSON.stringify(mergedData.plans) !== JSON.stringify(currentData.plans) ||
@@ -175,6 +181,8 @@ export default function App() {
       } catch (e) {
           console.error("Sync loop error", e);
           setSyncStatus('error');
+      } finally {
+          isSyncingRef.current = false;
       }
   }, [syncConfig]);
 
@@ -183,9 +191,9 @@ export default function App() {
       if (syncConfig.enabled && syncConfig.supabaseUrl && syncConfig.supabaseKey) {
           // Initialize Supabase client
           SupabaseService.initSupabase(syncConfig.supabaseUrl, syncConfig.supabaseKey);
-          setSyncStatus('syncing');
           
           // Trigger initial sync after initialization
+          // We do this immediately on mount/enable to ensure data is fresh
           triggerSync();
       } else {
           setSyncStatus('offline');
@@ -194,6 +202,12 @@ export default function App() {
 
   // Auto Sync on Data Change (Debounced)
   useEffect(() => {
+      // Skip the first mount to prevent double-syncing (since Init effect handles it)
+      if (isFirstMount.current) {
+          isFirstMount.current = false;
+          return;
+      }
+
       if (!syncConfig.enabled) return;
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
       
@@ -202,7 +216,7 @@ export default function App() {
       }, 3000); // 3 seconds debounce
 
       return () => { if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current); }
-  }, [transactions, plans, cycleStartDay, deletedIds, triggerSync]); 
+  }, [transactions, plans, cycleStartDay, deletedIds, triggerSync, syncConfig.enabled]); 
 
   // Auto Sync on Visibility Change (App Open / Foreground)
   useEffect(() => {
