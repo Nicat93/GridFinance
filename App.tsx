@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus } from './types';
 import TransactionGrid from './components/TransactionGrid';
@@ -7,6 +8,10 @@ import PlanList from './components/PlanList';
 import ConfirmModal from './components/ConfirmModal';
 import SettingsModal from './components/SettingsModal';
 import * as SupabaseService from './services/supabaseService';
+
+// Injected by Vite
+// We use a defensive check in the component to handle cases where this isn't defined
+declare const __APP_VERSION__: string | undefined;
 
 // --- Utility Functions ---
 
@@ -103,6 +108,9 @@ export default function App() {
   const syncTimeoutRef = useRef<number | null>(null);
   const isSyncingRef = useRef(false);
   const isFirstMount = useRef(true);
+
+  // Safe access to version
+  const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0';
 
   // --- Effects: Persistence ---
   useEffect(() => { localStorage.setItem('transactions', JSON.stringify(transactions)); }, [transactions]);
@@ -507,7 +515,7 @@ export default function App() {
         )}
 
         {/* History Section */}
-        <div className="mb-20">
+        <div className="mb-6">
             <div className="flex items-center gap-2 mb-1 mt-4 cursor-pointer group select-none" onClick={() => setShowHistory(!showHistory)}>
                  <svg className="w-2.5 h-2.5 text-gray-500 dark:text-gray-600 transition-transform duration-200" style={{ transform: showHistory ? 'rotate(90deg)' : 'rotate(0deg)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
                  <h1 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest group-hover:text-gray-800 dark:group-hover:text-gray-200 transition-colors">History</h1>
@@ -515,6 +523,13 @@ export default function App() {
             {showHistory && <TransactionGrid transactions={transactions} onDelete={deleteTransaction} onEdit={(t) => { setEditingItem(t); setIsModalOpen(true); }} />}
         </div>
       </main>
+
+      {/* Version Footer */}
+      <div className="w-full flex justify-center py-6 opacity-30 pointer-events-none select-none">
+          <span className="text-[10px] font-mono font-bold text-gray-500 dark:text-gray-500">
+            v{appVersion}
+          </span>
+      </div>
       
       {/* Floating Action Buttons */}
       <button 
