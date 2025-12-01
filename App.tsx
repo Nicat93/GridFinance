@@ -499,7 +499,7 @@ export default function App() {
   const handleAlternativeKeepCycle = () => { if (shiftCycleDialog) { executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate); setShiftCycleDialog(null); } };
 
   return (
-    <div className="min-h-screen pb-20 bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-300 font-sans transition-colors">
+    <div className="min-h-screen pb-20 bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-300 font-sans transition-colors relative">
       <SummaryBar snapshot={snapshot} onUpdateDate={handleUpdateBillingDate} syncStatus={syncStatus} />
       <main className="max-w-4xl mx-auto px-4 pt-4">
         
@@ -525,8 +525,8 @@ export default function App() {
       </main>
 
       {/* Version Footer */}
-      <div className="w-full flex justify-center py-6 opacity-30 pointer-events-none select-none">
-          <span className="text-[10px] font-mono font-bold text-gray-500 dark:text-gray-500">
+      <div className="fixed bottom-1 w-full flex justify-center pointer-events-none select-none z-0">
+          <span className="text-[10px] font-mono font-bold text-gray-400/20 dark:text-gray-600/20">
             v{appVersion}
           </span>
       </div>
