@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useMemo } from 'react';
 import { Transaction } from '../types';
 
 interface Props {
@@ -11,7 +12,23 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const sorted = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const sorted = useMemo(() => {
+    return [...transactions].sort((a, b) => {
+        // 1. Sort by Date Descending (Newest first)
+        const timeA = new Date(a.date).getTime();
+        const timeB = new Date(b.date).getTime();
+        if (timeA !== timeB) return timeB - timeA;
+
+        // 2. Secondary: Last Modified Descending (Recently added/edited first)
+        // This ensures consistent order for same-day transactions after sync
+        const modA = a.lastModified || 0;
+        const modB = b.lastModified || 0;
+        if (modA !== modB) return modB - modA;
+
+        // 3. Fallback: ID (Absolute determinism)
+        return a.id.localeCompare(b.id);
+    });
+  }, [transactions]);
 
   // --- Handlers ---
   

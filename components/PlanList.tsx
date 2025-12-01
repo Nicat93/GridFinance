@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { RecurringPlan, Frequency } from '../types';
 
@@ -30,7 +31,7 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  // Sorting: Active plans first, then by date
+  // Sorting: Active plans first, then by date, then by lastModified (stability)
   const sortedPlans = useMemo(() => {
       return [...plans].sort((a, b) => {
           const isMaxedA = a.maxOccurrences && a.occurrencesGenerated >= a.maxOccurrences;
@@ -41,7 +42,12 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
           
           const dateA = addTimeLocal(a.startDate, a.frequency, a.occurrencesGenerated);
           const dateB = addTimeLocal(b.startDate, b.frequency, b.occurrencesGenerated);
-          return dateA.getTime() - dateB.getTime();
+          
+          const dateDiff = dateA.getTime() - dateB.getTime();
+          if (dateDiff !== 0) return dateDiff;
+
+          // Secondary stable sort
+          return (b.lastModified || 0) - (a.lastModified || 0);
       });
   }, [plans]);
 
