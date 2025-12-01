@@ -48,7 +48,7 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
   if (plans.length === 0) return null;
   const today = new Date(); today.setHours(0,0,0,0);
 
-  // Handlers
+  // --- Handlers ---
   const handleDeleteClick = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(id); };
   const handleConfirmDelete = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); onDelete(id); setConfirmDeleteId(null); };
   const handleCancelDelete = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(null); };
@@ -63,7 +63,7 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
             {/* --- Header --- */}
             <div className="flex bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400 font-mono uppercase tracking-wider text-[10px]">
                 <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium flex-1">Desc</div>
-                <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium text-right w-28">Amt</div>
+                <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium text-right w-24 sm:w-28">Amt</div>
             </div>
 
             {/* --- Body --- */}
@@ -84,10 +84,10 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
                             <div className="flex items-center cursor-pointer py-1" onClick={() => toggleRow(plan.id)}>
                                 <div className="px-2 flex-1 min-w-0 flex items-center gap-2">
                                     <div className={`w-1 h-4 rounded-sm ${plan.type === 'income' ? 'bg-emerald-600 dark:bg-emerald-800' : 'bg-rose-600 dark:bg-rose-800'}`}></div>
-                                    <div className="text-gray-700 dark:text-gray-300 font-medium truncate text-sm">{plan.description}</div>
+                                    <div className="text-gray-700 dark:text-gray-300 font-medium truncate text-xs sm:text-sm">{plan.description}</div>
                                     {plan.isInstallment && <span className="text-[9px] text-blue-600 dark:text-blue-500 bg-blue-100 dark:bg-blue-900/20 px-1 rounded">LOAN</span>}
                                 </div>
-                                <div className={`px-2 text-right w-28 whitespace-nowrap text-sm ${plan.type === 'income' ? 'text-emerald-600 dark:text-emerald-400/80' : 'text-rose-600 dark:text-rose-400/80'}`}>
+                                <div className={`px-2 text-right w-24 sm:w-28 whitespace-nowrap text-xs sm:text-sm tracking-tight ${plan.type === 'income' ? 'text-emerald-600 dark:text-emerald-400/80' : 'text-rose-600 dark:text-rose-400/80'}`}>
                                     {plan.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </div>
                             </div>

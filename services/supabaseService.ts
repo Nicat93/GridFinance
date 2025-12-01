@@ -5,7 +5,7 @@ let supabase: any = null;
 
 /**
  * Initialize the Supabase client.
- * This can be called multiple times if keys change.
+ * This can be called multiple times if keys change (e.g. from settings).
  */
 export const initSupabase = (url: string, key: string) => {
     if (!url || !key) {

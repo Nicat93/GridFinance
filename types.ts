@@ -11,20 +11,29 @@ export enum Frequency {
  * Represents a single financial transaction (income or expense).
  */
 export interface Transaction {
+  /** Unique identifier (UUID or random string) */
   id: string;
-  date: string; // ISO Date string YYYY-MM-DD
+  /** ISO Date string YYYY-MM-DD */
+  date: string;
+  /** Description of the transaction */
   description: string;
+  /** Monetary value */
   amount: number;
+  /** Income or Expense */
   type: TransactionType;
+  /** Category tag (e.g., 'Food', 'Rent') */
   category: string;
+  /** Tracks if the transaction has been marked as paid/cleared */
   isPaid: boolean;
-  relatedPlanId?: string; // Links this transaction to a RecurringPlan if generated from one
-  lastModified?: number; // Timestamp for sync conflict resolution
+  /** Links this transaction to a RecurringPlan if generated from one */
+  relatedPlanId?: string;
+  /** Timestamp for sync conflict resolution (Last-Write-Wins) */
+  lastModified?: number;
 }
 
 /**
  * Represents a recurring financial plan or bill (e.g., Rent, Netflix).
- * Used to generate future projections and instantiate transactions.
+ * Used to generate future projections and instantiate actual transactions.
  */
 export interface RecurringPlan {
   id: string;
@@ -32,14 +41,19 @@ export interface RecurringPlan {
   amount: number;
   type: TransactionType;
   frequency: Frequency;
-  startDate: string; // Anchor date for the recurrence
+  /** Anchor date for the recurrence calculation */
+  startDate: string;
   endDate?: string;
-  maxOccurrences?: number; // Stop after N occurrences (e.g., loan payments)
-  occurrencesGenerated: number; // How many real Transactions have been created from this plan
+  /** Optional limit on number of occurrences (e.g. for loans) */
+  maxOccurrences?: number;
+  /** Counter of how many real Transactions have been created from this plan */
+  occurrencesGenerated: number;
   category: string;
-  isInstallment: boolean; // Visual tag for loans/installments
+  /** Visual tag to treat this as a loan/installment plan */
+  isInstallment: boolean;
   totalInstallmentAmount?: number;
-  lastModified?: number; // Timestamp for sync conflict resolution
+  /** Timestamp for sync conflict resolution */
+  lastModified?: number;
 }
 
 /**
@@ -62,15 +76,21 @@ export interface BackupData {
   transactions: Transaction[];
   plans: RecurringPlan[];
   cycleStartDay: number;
+  /** Timestamp of the last local modification */
   lastModified?: number;
-  deletedIds?: { [id: string]: number }; // Tombstones for sync: { id: timestampOfDeletion }
+  /** Tombstones for sync: { id: timestampOfDeletion } */
+  deletedIds?: { [id: string]: number };
 }
 
+/**
+ * Configuration for the synchronization service.
+ */
 export interface SyncConfig {
   enabled: boolean;
   supabaseUrl: string;
   supabaseKey: string;
-  syncId: string; // Unique ID (partition key) for this user's data
+  /** Unique ID (partition key) for this user's data in the shared table */
+  syncId: string;
   lastSyncedAt: number;
 }
 

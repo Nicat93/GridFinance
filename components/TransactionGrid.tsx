@@ -13,7 +13,8 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
 
   const sorted = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  // Handlers
+  // --- Handlers ---
+  
   const handleDeleteClick = (e: React.MouseEvent, id: string) => {
     e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(id);
   };
@@ -37,7 +38,7 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
         {/* --- Header --- */}
         <div className="flex bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400 font-mono uppercase tracking-wider text-[10px]">
           <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium flex-1">Desc</div>
-          <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium text-right w-28">Amt</div>
+          <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium text-right w-24 sm:w-28">Amt</div>
         </div>
 
         {/* --- Body --- */}
@@ -55,9 +56,9 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
                     {/* Main Row */}
                     <div className="flex items-center cursor-pointer py-1" onClick={() => toggleRow(tx.id)}>
                         <div className="px-2 flex-1 min-w-0">
-                            <div className="text-gray-700 dark:text-gray-300 font-medium truncate text-sm">{tx.description}</div>
+                            <div className="text-gray-700 dark:text-gray-300 font-medium truncate text-xs sm:text-sm">{tx.description}</div>
                         </div>
-                        <div className={`px-2 text-right w-28 whitespace-nowrap text-sm ${tx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                        <div className={`px-2 text-right w-24 sm:w-28 whitespace-nowrap text-xs sm:text-sm tracking-tight ${tx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                             {tx.type === 'expense' ? '-' : '+'}
                             {tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>

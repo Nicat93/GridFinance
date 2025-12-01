@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus } from './types';
 import TransactionGrid from './components/TransactionGrid';
 import SummaryBar from './components/SummaryBar';
@@ -71,7 +71,7 @@ export default function App() {
       const saved = localStorage.getItem('syncConfig');
       if (saved) return JSON.parse(saved);
 
-      // Default Demo Credentials (NOTE: In production, do not hardcode secrets)
+      // Default Demo Credentials
       const envUrl = 'https://svfcmefotkyphvzhrkfj.supabase.co';
       const envKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2ZmNtZWZvdGt5cGh2emhya2ZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1NzE5NDgsImV4cCI6MjA4MDE0Nzk0OH0.u0cIFe7TZa1h59bizfsl5qm9bwTUYmQ8pYXsadLbvWo';
 
@@ -118,16 +118,11 @@ export default function App() {
 
   // --- Sync Logic ---
 
-  // 1. Initialize Client
+  // Ref to hold current state for async operations to avoid stale closures
+  const stateRef = useRef({ transactions, plans, cycleStartDay, deletedIds });
   useEffect(() => {
-      if (syncConfig.enabled && syncConfig.supabaseUrl && syncConfig.supabaseKey) {
-          SupabaseService.initSupabase(syncConfig.supabaseUrl, syncConfig.supabaseKey);
-          setSyncStatus('syncing');
-          triggerSync();
-      } else {
-          setSyncStatus('offline');
-      }
-  }, [syncConfig.enabled, syncConfig.supabaseUrl, syncConfig.supabaseKey]);
+      stateRef.current = { transactions, plans, cycleStartDay, deletedIds };
+  }, [transactions, plans, cycleStartDay, deletedIds]);
 
   /**
    * Core Sync Function
@@ -136,19 +131,37 @@ export default function App() {
    * 3. Pushes merged result back to server
    * 4. Updates local state
    */
-  const triggerSync = async () => {
+  const triggerSync = useCallback(async () => {
       if (!syncConfig.enabled || !syncConfig.syncId) return;
       
+      const currentLocalState = stateRef.current;
+
       try {
+          // 1. Fetch
           const remoteData = await SupabaseService.fetchRemoteData(syncConfig);
           
-          let currentData: BackupData = { transactions, plans, cycleStartDay, lastModified: Date.now(), deletedIds };
+          let currentData: BackupData = { 
+              transactions: currentLocalState.transactions, 
+              plans: currentLocalState.plans, 
+              cycleStartDay: currentLocalState.cycleStartDay, 
+              lastModified: Date.now(), 
+              deletedIds: currentLocalState.deletedIds 
+          };
           let mergedData = currentData;
 
+          // 2. Merge
           if (remoteData) {
               mergedData = SupabaseService.mergeData(currentData, remoteData);
-              // Only update state if merge resulted in changes
-              if (mergedData !== currentData) {
+              
+              // 3. Update Local State (Only if meaningful change occurred to prevent loops)
+              // We compare JSON stringified versions of the actual data content
+              const hasChanges = 
+                  JSON.stringify(mergedData.transactions) !== JSON.stringify(currentData.transactions) ||
+                  JSON.stringify(mergedData.plans) !== JSON.stringify(currentData.plans) ||
+                  mergedData.cycleStartDay !== currentData.cycleStartDay ||
+                  JSON.stringify(mergedData.deletedIds) !== JSON.stringify(currentData.deletedIds);
+
+              if (hasChanges) {
                   setTransactions(mergedData.transactions);
                   setPlans(mergedData.plans);
                   setCycleStartDay(mergedData.cycleStartDay);
@@ -156,15 +169,30 @@ export default function App() {
               }
           }
 
+          // 4. Push
           const success = await SupabaseService.pushRemoteData(syncConfig, mergedData);
           setSyncStatus(success ? 'synced' : 'error');
       } catch (e) {
           console.error("Sync loop error", e);
           setSyncStatus('error');
       }
-  };
+  }, [syncConfig]);
 
-  // 2. Auto Sync on Data Change (Debounced)
+  // Initialize Client & Trigger Initial Sync
+  useEffect(() => {
+      if (syncConfig.enabled && syncConfig.supabaseUrl && syncConfig.supabaseKey) {
+          // Initialize Supabase client
+          SupabaseService.initSupabase(syncConfig.supabaseUrl, syncConfig.supabaseKey);
+          setSyncStatus('syncing');
+          
+          // Trigger initial sync after initialization
+          triggerSync();
+      } else {
+          setSyncStatus('offline');
+      }
+  }, [syncConfig.enabled, syncConfig.supabaseUrl, syncConfig.supabaseKey, triggerSync]);
+
+  // Auto Sync on Data Change (Debounced)
   useEffect(() => {
       if (!syncConfig.enabled) return;
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
@@ -174,28 +202,25 @@ export default function App() {
       }, 3000); // 3 seconds debounce
 
       return () => { if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current); }
-  }, [transactions, plans, cycleStartDay, deletedIds]); 
+  }, [transactions, plans, cycleStartDay, deletedIds, triggerSync]); 
 
-  // 3. Auto Sync on Visibility Change (App Open / Foreground)
+  // Auto Sync on Visibility Change (App Open / Foreground)
   useEffect(() => {
       const handleVisibilityChange = () => {
           if (document.visibilityState === 'visible' && syncConfig.enabled) {
               console.log("App foregrounded: Triggering sync...");
-              // We explicitly call the sync function here to fetch latest changes 
-              // from other devices when the user returns to the app.
               triggerSync();
           }
       };
 
       document.addEventListener('visibilitychange', handleVisibilityChange);
-      // 'focus' captures when the window gains focus (e.g. desktop tab switching)
       window.addEventListener('focus', handleVisibilityChange);
 
       return () => {
           document.removeEventListener('visibilitychange', handleVisibilityChange);
           window.removeEventListener('focus', handleVisibilityChange);
       };
-  }, [syncConfig.enabled, transactions, plans, cycleStartDay, deletedIds]); // Re-bind if dependencies of triggerSync change
+  }, [syncConfig.enabled, triggerSync]);
 
   // --- Logic: Financial Snapshot Calculation ---
 
