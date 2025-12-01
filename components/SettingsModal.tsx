@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { SyncConfig } from '../types';
 
@@ -10,17 +11,21 @@ interface Props {
   syncConfig: SyncConfig;
   onSaveSyncConfig: (cfg: SyncConfig) => void;
   onClearData: () => void;
+  onExportData: () => void;
+  onImportData: (file: File) => void;
 }
 
 const SettingsModal: React.FC<Props> = ({ 
-    isOpen, onClose, isDarkMode, onToggleTheme, syncConfig, onSaveSyncConfig, onClearData 
+    isOpen, onClose, isDarkMode, onToggleTheme, syncConfig, onSaveSyncConfig, onClearData,
+    onExportData, onImportData
 }) => {
-  const [syncId, setSyncId] = useState(syncConfig.syncId || 'my-finance-data');
+  const [syncId, setSyncId] = useState(syncConfig.syncId || '');
   const [enabled, setEnabled] = useState(syncConfig.enabled);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
       if (isOpen) {
-          setSyncId(syncConfig.syncId || 'my-finance-data');
+          setSyncId(syncConfig.syncId || '');
           setEnabled(syncConfig.enabled);
       }
   }, [isOpen, syncConfig]);
@@ -29,14 +34,24 @@ const SettingsModal: React.FC<Props> = ({
       onSaveSyncConfig({
           supabaseUrl: syncConfig.supabaseUrl, // Persist existing values from env/storage
           supabaseKey: syncConfig.supabaseKey, // Persist existing values from env/storage
-          syncId: syncId,
+          syncId: syncId.trim(),
           enabled: enabled,
           lastSyncedAt: 0
       });
       onClose();
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0]) {
+          onImportData(e.target.files[0]);
+      }
+      // Reset input so same file can be selected again if needed
+      if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const isConfigured = !!(syncConfig.supabaseUrl && syncConfig.supabaseKey);
+  // Valid if backend is configured AND (sync is disabled OR (sync is enabled AND key is provided))
+  const canSave = isConfigured && (!enabled || syncId.trim().length > 0);
 
   if (!isOpen) return null;
 
@@ -66,6 +81,37 @@ const SettingsModal: React.FC<Props> = ({
                 </button>
             </div>
 
+            {/* Local Backup */}
+            <div className="space-y-3">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Local Backup</h3>
+                <div className="grid grid-cols-2 gap-3">
+                    <button 
+                        onClick={onExportData}
+                        className="flex flex-col items-center justify-center p-3 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
+                    >
+                        <svg className="w-5 h-5 mb-1 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Download</span>
+                    </button>
+                    <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex flex-col items-center justify-center p-3 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
+                    >
+                        <svg className="w-5 h-5 mb-1 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Restore</span>
+                    </button>
+                    <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        className="hidden" 
+                        accept=".json" 
+                        onChange={handleFileChange}
+                    />
+                </div>
+                <p className="text-[9px] text-gray-400 leading-tight">
+                    Download a JSON file to save to Google Drive or iCloud. Restoring will overwrite current data.
+                </p>
+            </div>
+
             {/* Cloud Sync */}
             <div className="space-y-3">
                 <div className="flex justify-between items-end">
@@ -85,13 +131,13 @@ const SettingsModal: React.FC<Props> = ({
                 <div className={`space-y-3 transition-opacity ${enabled ? 'opacity-100' : 'opacity-50'}`}>
                     
                     <div className={enabled ? '' : 'pointer-events-none'}>
-                        <label className="block text-[10px] text-gray-500 mb-1">Secret Key</label>
+                        <label className="block text-[10px] text-gray-500 mb-1">Secret Key {enabled && '*'}</label>
                         <input 
                             type="text" 
                             value={syncId}
                             onChange={e => setSyncId(e.target.value)}
-                            placeholder="my-secret-key"
-                            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded p-2 text-xs text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-indigo-500 outline-none font-mono"
+                            placeholder="e.g. my-family-budget-2024"
+                            className={`w-full bg-gray-50 dark:bg-gray-900 border rounded p-2 text-xs text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-indigo-500 outline-none font-mono ${enabled && !syncId.trim() ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-700'}`}
                         />
                         <p className="text-[9px] text-gray-400 mt-1">Unique key to identify and sync this device's data.</p>
                     </div>
@@ -104,7 +150,7 @@ const SettingsModal: React.FC<Props> = ({
                 </div>
                 <button 
                     onClick={handleSaveSync}
-                    disabled={!isConfigured}
+                    disabled={!canSave}
                     className="w-full bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 py-2 rounded text-xs font-bold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     Sync

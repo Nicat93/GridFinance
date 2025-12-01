@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus } from './types';
 import TransactionGrid from './components/TransactionGrid';
@@ -316,6 +317,52 @@ export default function App() {
       }
   };
 
+  const handleExportData = () => {
+    const data = {
+        transactions,
+        plans,
+        cycleStartDay,
+        deletedIds,
+        exportDate: new Date().toISOString(),
+        version: 1
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `grid-finance-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportData = async (file: File) => {
+    try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        
+        // Basic validation
+        if (!Array.isArray(data.transactions) || !Array.isArray(data.plans)) {
+            alert("Invalid backup file format.");
+            return;
+        }
+
+        if (window.confirm(`Found ${data.transactions.length} transactions and ${data.plans.length} plans. This will OVERWRITE your current local data. Continue?`)) {
+            setTransactions(data.transactions);
+            setPlans(data.plans);
+            if (data.cycleStartDay) setCycleStartDay(data.cycleStartDay);
+            if (data.deletedIds) setDeletedIds(data.deletedIds);
+            
+            setIsSettingsOpen(false);
+            alert("Import successful.");
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Failed to parse backup file.");
+    }
+  };
+
   const handleSaveSyncConfig = (newConfig: SyncConfig) => {
     // If key changed, clear local data to prevent data leakage/mixing
     if (newConfig.syncId !== syncConfig.syncId) {
@@ -480,6 +527,8 @@ export default function App() {
         syncConfig={syncConfig}
         onSaveSyncConfig={handleSaveSyncConfig}
         onClearData={handleClearData}
+        onExportData={handleExportData}
+        onImportData={handleImportData}
       />
       <ConfirmModal 
         isOpen={!!shiftCycleDialog} title="Next Billing Cycle?" message={`This payment (${shiftCycleDialog?.newDate.toLocaleDateString()}) falls in the next billing cycle. Shift cycle start to ${shiftCycleDialog?.newDate.getDate()}th?`}
