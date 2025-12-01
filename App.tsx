@@ -1,12 +1,10 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, BackupData } from './types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Transaction, RecurringPlan, Frequency, FinancialSnapshot } from './types';
 import TransactionGrid from './components/TransactionGrid';
 import SummaryBar from './components/SummaryBar';
 import AddTransactionModal from './components/AddTransactionModal';
 import PlanList from './components/PlanList';
 import ConfirmModal from './components/ConfirmModal';
-import SettingsModal from './components/SettingsModal';
-import * as BackupService from './services/backupService';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -69,7 +67,6 @@ export default function App() {
   const [viewDate, setViewDate] = useState<Date>(() => new Date());
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Transaction | RecurringPlan | null>(null);
 
   // Collapsible states
@@ -78,9 +75,6 @@ export default function App() {
 
   // State for cycle shift confirmation
   const [shiftCycleDialog, setShiftCycleDialog] = useState<{ isOpen: boolean, planId: string, newDate: Date } | null>(null);
-
-  // Auto-backup Debounce Ref
-  const backupTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     localStorage.setItem('transactions', JSON.stringify(transactions));
@@ -93,38 +87,6 @@ export default function App() {
   useEffect(() => {
       localStorage.setItem('cycleStartDay', cycleStartDay.toString());
   }, [cycleStartDay]);
-
-  // Auto Backup Effect (Native Filesystem)
-  useEffect(() => {
-    // Check if auto-backup is enabled
-    const autoBackupEnabled = localStorage.getItem('native_auto_backup') === 'true';
-    if (!autoBackupEnabled) return;
-
-    if (backupTimeoutRef.current) {
-        clearTimeout(backupTimeoutRef.current);
-    }
-
-    // Debounce 2 seconds
-    backupTimeoutRef.current = window.setTimeout(async () => {
-        const data: BackupData = {
-            version: 1,
-            timestamp: Date.now(),
-            transactions,
-            plans,
-            cycleStartDay
-        };
-        try {
-            await BackupService.saveToDevice(data);
-            console.log("Auto-backup to device successful");
-        } catch (e) {
-            console.log("Auto-backup failed (Permissions?)");
-        }
-    }, 2000);
-
-    return () => {
-        if (backupTimeoutRef.current) clearTimeout(backupTimeoutRef.current);
-    }
-  }, [transactions, plans, cycleStartDay]);
 
   const snapshot: FinancialSnapshot = useMemo(() => {
     const currentBalance = transactions.reduce((acc, t) => {
@@ -252,12 +214,6 @@ export default function App() {
     }
   };
 
-  const handleImportData = (data: BackupData) => {
-      if (data.transactions) setTransactions(data.transactions);
-      if (data.plans) setPlans(data.plans);
-      if (data.cycleStartDay) setCycleStartDay(data.cycleStartDay);
-  };
-
   const handleEditTransaction = (tx: Transaction) => {
       setEditingItem(tx);
       setIsModalOpen(true);
@@ -381,21 +337,11 @@ export default function App() {
       setPlans(prev => prev.filter(p => p.id !== id));
   };
 
-  // Prepare backup object for settings modal
-  const currentBackupData: BackupData = {
-      version: 1,
-      timestamp: Date.now(),
-      transactions,
-      plans,
-      cycleStartDay
-  };
-
   return (
     <div className="min-h-screen pb-20 bg-black text-gray-300 font-sans">
       <SummaryBar 
         snapshot={snapshot} 
         onUpdateDate={handleUpdateBillingDate}
-        onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
       <main className="max-w-4xl mx-auto px-4 pt-4">
@@ -451,7 +397,7 @@ export default function App() {
             {showHistory && (
                 <TransactionGrid 
                     transactions={transactions} 
-                    onDelete={deleteTransaction}
+                    onDelete={deleteTransaction} 
                     onEdit={handleEditTransaction}
                 />
             )}
@@ -471,13 +417,6 @@ export default function App() {
         onClose={handleCloseModal} 
         onSave={handleSaveData} 
         initialData={editingItem}
-      />
-
-      <SettingsModal 
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        dataToBackup={currentBackupData}
-        onImport={handleImportData}
       />
 
       <ConfirmModal 

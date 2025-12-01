@@ -43,8 +43,6 @@ export interface FinancialSnapshot {
 }
 
 export interface BackupData {
-  version: number;
-  timestamp: number;
   transactions: Transaction[];
   plans: RecurringPlan[];
   cycleStartDay: number;
