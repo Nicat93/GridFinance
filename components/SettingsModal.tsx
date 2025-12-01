@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { SyncConfig } from '../types';
 
@@ -106,7 +107,7 @@ const SettingsModal: React.FC<Props> = ({
                     disabled={!isConfigured}
                     className="w-full bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 py-2 rounded text-xs font-bold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                    Save & Sync
+                    Sync
                 </button>
             </div>
 

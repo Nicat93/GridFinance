@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus } from './types';
 import TransactionGrid from './components/TransactionGrid';
@@ -76,7 +77,7 @@ export default function App() {
       const envKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2ZmNtZWZvdGt5cGh2emhya2ZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1NzE5NDgsImV4cCI6MjA4MDE0Nzk0OH0.u0cIFe7TZa1h59bizfsl5qm9bwTUYmQ8pYXsadLbvWo';
 
       return { 
-          enabled: !!(envUrl && envKey), 
+          enabled: false, 
           supabaseUrl: envUrl, 
           supabaseKey: envKey, 
           syncId: '', 
@@ -315,6 +316,17 @@ export default function App() {
       }
   };
 
+  const handleSaveSyncConfig = (newConfig: SyncConfig) => {
+    // If key changed, clear local data to prevent data leakage/mixing
+    if (newConfig.syncId !== syncConfig.syncId) {
+        setTransactions([]);
+        setPlans([]);
+        setDeletedIds({});
+        setCycleStartDay(1);
+    }
+    setSyncConfig(newConfig);
+  };
+
   const handleSaveData = (data: any) => {
     const now = Date.now();
     if (editingItem) {
@@ -466,7 +478,7 @@ export default function App() {
         isDarkMode={isDarkMode}
         onToggleTheme={() => setIsDarkMode(!isDarkMode)}
         syncConfig={syncConfig}
-        onSaveSyncConfig={setSyncConfig}
+        onSaveSyncConfig={handleSaveSyncConfig}
         onClearData={handleClearData}
       />
       <ConfirmModal 
