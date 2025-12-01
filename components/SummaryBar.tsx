@@ -37,10 +37,13 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus }) => 
   const handleContainerClick = () => {
     try {
         const input = dateInputRef.current;
+        if (!input) return;
+
         // Explicitly open the picker (works in Chrome/Edge/Firefox/Safari 16+)
-        if (input && 'showPicker' in input) {
+        // We use a local variable 'input' so TypeScript can correctly narrow the type
+        if (typeof (input as any).showPicker === 'function') {
             (input as any).showPicker();
-        } else if (input) {
+        } else {
              input.focus();
         }
     } catch (e) {
