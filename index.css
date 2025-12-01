@@ -8,17 +8,16 @@
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #111827; 
+  @apply bg-gray-100 dark:bg-gray-900;
 }
 ::-webkit-scrollbar-thumb {
-  background: #374151; 
+  @apply bg-gray-400 dark:bg-gray-700;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #4b5563; 
+  @apply bg-gray-500 dark:bg-gray-600;
 }
 body {
-  background-color: #030712;
-  color: #e5e7eb;
-  overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile */
+  @apply bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-200;
+  overscroll-behavior-y: none;
 }

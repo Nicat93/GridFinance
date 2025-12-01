@@ -15,7 +15,8 @@ export interface Transaction {
   type: TransactionType;
   category: string;
   isPaid: boolean;
-  relatedPlanId?: string; // If tied to a recurring plan or installment
+  relatedPlanId?: string;
+  lastModified?: number; // Timestamp for sync
 }
 
 export interface RecurringPlan {
@@ -25,17 +26,18 @@ export interface RecurringPlan {
   type: TransactionType;
   frequency: Frequency;
   startDate: string;
-  endDate?: string; // Optional end date
-  maxOccurrences?: number; // For limited number of payments
+  endDate?: string;
+  maxOccurrences?: number;
   occurrencesGenerated: number;
   category: string;
-  isInstallment: boolean; // Distinction for UI mostly
-  totalInstallmentAmount?: number; // If it's a fixed debt being paid off
+  isInstallment: boolean;
+  totalInstallmentAmount?: number;
+  lastModified?: number; // Timestamp for sync
 }
 
 export interface FinancialSnapshot {
   currentBalance: number;
-  projectedBalance: number; // Balance after known upcoming recurring items for next 30 days
+  projectedBalance: number;
   upcomingExpenses: number;
   upcomingIncome: number;
   periodStart: Date;
@@ -46,4 +48,16 @@ export interface BackupData {
   transactions: Transaction[];
   plans: RecurringPlan[];
   cycleStartDay: number;
+  lastModified?: number;
+  deletedIds?: { [id: string]: number }; // Tombstones for sync { id: timestamp }
 }
+
+export interface SyncConfig {
+  enabled: boolean;
+  supabaseUrl: string;
+  supabaseKey: string;
+  syncId: string; // Unique ID for this user's data row
+  lastSyncedAt: number;
+}
+
+export type SyncStatus = 'offline' | 'syncing' | 'synced' | 'error';

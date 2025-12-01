@@ -1,139 +1,126 @@
 import React, { useState, useEffect } from 'react';
-import { BackupData } from '../types';
-import * as BackupService from '../services/backupService';
+import { SyncConfig } from '../types';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  dataToBackup: BackupData;
-  onImport: (data: BackupData) => void;
+  isDarkMode: boolean;
+  onToggleTheme: () => void;
+  syncConfig: SyncConfig;
+  onSaveSyncConfig: (cfg: SyncConfig) => void;
+  onClearData: () => void;
 }
 
-const SettingsModal: React.FC<Props> = ({ isOpen, onClose, dataToBackup, onImport }) => {
-  const [autoBackup, setAutoBackup] = useState(() => localStorage.getItem('native_auto_backup') === 'true');
-  const [statusMsg, setStatusMsg] = useState('');
-  const [isBusy, setIsBusy] = useState(false);
+const SettingsModal: React.FC<Props> = ({ 
+    isOpen, onClose, isDarkMode, onToggleTheme, syncConfig, onSaveSyncConfig, onClearData 
+}) => {
+  const [syncId, setSyncId] = useState(syncConfig.syncId || 'my-finance-data');
+  const [enabled, setEnabled] = useState(syncConfig.enabled);
 
   useEffect(() => {
-    localStorage.setItem('native_auto_backup', String(autoBackup));
-  }, [autoBackup]);
+      if (isOpen) {
+          setSyncId(syncConfig.syncId || 'my-finance-data');
+          setEnabled(syncConfig.enabled);
+      }
+  }, [isOpen, syncConfig]);
 
-  // Handle Native Share (GDrive, WhatsApp, etc)
-  const handleShare = async () => {
-    setIsBusy(true);
-    setStatusMsg("Preparing share...");
-    try {
-        await BackupService.shareBackup(dataToBackup);
-        setStatusMsg("Share menu opened.");
-    } catch (e) {
-        setStatusMsg("Share failed. " + e);
-    } finally {
-        setIsBusy(false);
-    }
+  const handleSaveSync = () => {
+      onSaveSyncConfig({
+          supabaseUrl: syncConfig.supabaseUrl, // Persist existing values from env/storage
+          supabaseKey: syncConfig.supabaseKey, // Persist existing values from env/storage
+          syncId: syncId,
+          enabled: enabled,
+          lastSyncedAt: 0
+      });
+      onClose();
   };
 
-  // Force Save to Documents
-  const handleForceSave = async () => {
-    setIsBusy(true);
-    try {
-        const path = await BackupService.saveToDevice(dataToBackup);
-        setStatusMsg(`Success: ${path}`);
-    } catch (e) {
-        setStatusMsg("Save failed. Check Permissions.");
-    } finally {
-        setIsBusy(false);
-    }
-  };
-
-  // Restore from Documents
-  const handleRestore = async () => {
-    if (!window.confirm("This will overwrite your current data with the backup found in Documents/GridFinance. Continue?")) return;
-    setIsBusy(true);
-    try {
-        const data = await BackupService.loadFromDevice();
-        onImport(data);
-        setStatusMsg("Restored successfully.");
-        onClose();
-    } catch (e) {
-        setStatusMsg("Restore failed: " + e);
-    } finally {
-        setIsBusy(false);
-    }
-  };
+  const isConfigured = !!(syncConfig.supabaseUrl && syncConfig.supabaseKey);
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
-      <div className="bg-gray-950 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md p-6 flex flex-col gap-6">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
         
-        <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold text-gray-200">Data Management</h2>
-            <button onClick={onClose} className="text-gray-500 hover:text-white text-xl">✕</button>
+        {/* Header */}
+        <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
+            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200">Settings</h2>
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:hover:text-white">✕</button>
         </div>
 
-        {/* Auto Backup Toggle */}
-        <div className="bg-gray-900/50 p-4 rounded border border-gray-800">
-             <label className="flex items-center gap-3 cursor-pointer">
-                <input 
-                    type="checkbox" 
-                    checked={autoBackup} 
-                    onChange={(e) => setAutoBackup(e.target.checked)}
-                    className="w-5 h-5 rounded bg-gray-900 border-gray-700 text-indigo-600 focus:ring-0"
-                />
-                <div className="flex flex-col">
-                    <span className="text-sm font-bold text-gray-200">Auto-Backup to Device</span>
-                    <span className="text-xs text-gray-500">
-                        Automatically saves <span className="font-mono">GridFinance/backup.json</span> to your Documents folder on change.
-                    </span>
-                </div>
-            </label>
-        </div>
-
-        {/* Manual Actions */}
-        <div className="space-y-3">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-1">Manual Actions</h3>
+        <div className="p-5 space-y-6 overflow-y-auto max-h-[80vh]">
             
-            <button 
-                onClick={handleShare}
-                disabled={isBusy}
-                className="w-full bg-indigo-900 hover:bg-indigo-800 text-indigo-100 py-3 rounded text-sm font-medium border border-indigo-700/50 transition-colors flex items-center justify-center gap-2"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                </svg>
-                Share / Save to Drive
-            </button>
-
-            <div className="grid grid-cols-2 gap-3">
+            {/* Appearance */}
+            <div className="space-y-3">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Appearance</h3>
                 <button 
-                    onClick={handleForceSave}
-                    disabled={isBusy}
-                    className="bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 rounded text-xs transition-colors border border-gray-700"
+                    onClick={onToggleTheme}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
                 >
-                    Force Save Local
-                </button>
-                <button 
-                    onClick={handleRestore}
-                    disabled={isBusy}
-                    className="bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 rounded text-xs transition-colors border border-gray-700"
-                >
-                    Restore Local
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Theme</span>
+                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                        {isDarkMode ? 'Dark Mode 🌙' : 'Light Mode ☀️'}
+                    </span>
                 </button>
             </div>
-        </div>
 
-        <div className="text-[10px] text-gray-600 leading-tight">
-            <strong>Note:</strong> On Android, "Auto-Backup" requires Storage Permissions. The file is saved to your public Documents folder so you can access it anytime.
-        </div>
-
-        {/* Status Message */}
-        {statusMsg && (
-            <div className="text-xs text-center text-indigo-400 font-mono pt-2 border-t border-gray-900">
-                {statusMsg}
+            {/* Cloud Sync */}
+            <div className="space-y-3">
+                <div className="flex justify-between items-end">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Supabase Sync</h3>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-gray-400">Enable</span>
+                        <input 
+                            type="checkbox" 
+                            checked={enabled}
+                            onChange={(e) => setEnabled(e.target.checked)}
+                            className="toggle-checkbox"
+                            disabled={!isConfigured}
+                        />
+                    </div>
+                </div>
+                
+                <div className={`space-y-3 transition-opacity ${enabled ? 'opacity-100' : 'opacity-50'}`}>
+                    
+                    <div className={enabled ? '' : 'pointer-events-none'}>
+                        <label className="block text-[10px] text-gray-500 mb-1">Secret Key</label>
+                        <input 
+                            type="text" 
+                            value={syncId}
+                            onChange={e => setSyncId(e.target.value)}
+                            placeholder="my-secret-key"
+                            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded p-2 text-xs text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-indigo-500 outline-none font-mono"
+                        />
+                        <p className="text-[9px] text-gray-400 mt-1">Unique key to identify and sync this device's data.</p>
+                    </div>
+                    
+                    <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-100 dark:border-blue-900/30">
+                        <p className="text-[9px] text-blue-600 dark:text-blue-300 leading-tight">
+                            Use the same Secret Key on all devices you want to keep in sync.
+                        </p>
+                    </div>
+                </div>
+                <button 
+                    onClick={handleSaveSync}
+                    disabled={!isConfigured}
+                    className="w-full bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 py-2 rounded text-xs font-bold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Save & Sync
+                </button>
             </div>
-        )}
 
+            {/* Danger Zone */}
+            <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
+                <button 
+                    onClick={onClearData}
+                    className="w-full border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/10 py-2 rounded text-xs font-bold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                >
+                    Clear All Local Data
+                </button>
+            </div>
+
+        </div>
       </div>
     </div>
   );
