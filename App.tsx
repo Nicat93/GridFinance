@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus } from './types';
 import TransactionGrid from './components/TransactionGrid';
@@ -167,7 +164,7 @@ export default function App() {
               
               mergedTransactions = merged.transactions;
               mergedPlans = merged.plans;
-              mergedDeletedIds = merged.deletedIds;
+              mergedDeletedIds = merged.deletedIds || {};
               mergedCycleDay = merged.cycleStartDay;
 
               // Update State if changed
