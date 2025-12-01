@@ -13,6 +13,7 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
 
   const sorted = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+  // Handlers
   const handleDeleteClick = (e: React.MouseEvent, id: string) => {
     e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(id);
   };
@@ -32,13 +33,14 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
   return (
     <div className="border border-gray-200 dark:border-gray-800 rounded-sm w-full bg-white dark:bg-gray-950 transition-colors">
       <div className="w-full text-left text-xs border-collapse">
-        {/* Header */}
+        
+        {/* --- Header --- */}
         <div className="flex bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400 font-mono uppercase tracking-wider text-[10px]">
           <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium flex-1">Desc</div>
           <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium text-right w-28">Amt</div>
         </div>
 
-        {/* Body */}
+        {/* --- Body --- */}
         <div className="divide-y divide-gray-100 dark:divide-gray-800 font-mono">
           {sorted.length === 0 ? (
             <div className="p-4 text-center text-gray-400 dark:text-gray-600 italic text-[10px]">No transactions recorded.</div>
@@ -49,6 +51,7 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
               
               return (
                 <div key={tx.id} className="group flex flex-col hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
+                    
                     {/* Main Row */}
                     <div className="flex items-center cursor-pointer py-1" onClick={() => toggleRow(tx.id)}>
                         <div className="px-2 flex-1 min-w-0">
@@ -60,7 +63,7 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
                         </div>
                     </div>
 
-                    {/* Expanded Details */}
+                    {/* Expanded Details Panel */}
                     {isExpanded && (
                         <div 
                             className="bg-gray-50 dark:bg-gray-900/50 px-2 py-2 text-[11px] text-gray-500 border-t border-gray-100 dark:border-gray-800/50 flex flex-col gap-2 cursor-default"
@@ -71,6 +74,7 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
                              </div>
                              <div className="text-gray-600 dark:text-gray-400 italic break-words">{tx.description}</div>
                              
+                             {/* Action Buttons */}
                              <div className="flex gap-2 pt-1 border-t border-gray-200 dark:border-gray-800/50 mt-1 relative z-10">
                                 {isDeleting ? (
                                     <>

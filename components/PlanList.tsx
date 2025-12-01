@@ -8,6 +8,7 @@ interface Props {
   onEdit: (plan: RecurringPlan) => void;
 }
 
+// --- Date Helpers ---
 const parseLocalDate = (dateStr: string): Date => {
     const parts = dateStr.split('-');
     return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
@@ -24,16 +25,20 @@ const addTimeLocal = (date: string | Date, freq: Frequency, count: number): Date
     return d;
 };
 
+// --- Component ---
 const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
+  // Sorting: Active plans first, then by date
   const sortedPlans = useMemo(() => {
       return [...plans].sort((a, b) => {
           const isMaxedA = a.maxOccurrences && a.occurrencesGenerated >= a.maxOccurrences;
           const isMaxedB = b.maxOccurrences && b.occurrencesGenerated >= b.maxOccurrences;
+          
           if (isMaxedA && !isMaxedB) return 1;
           if (!isMaxedA && isMaxedB) return -1;
+          
           const dateA = addTimeLocal(a.startDate, a.frequency, a.occurrencesGenerated);
           const dateB = addTimeLocal(b.startDate, b.frequency, b.occurrencesGenerated);
           return dateA.getTime() - dateB.getTime();
@@ -43,6 +48,7 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
   if (plans.length === 0) return null;
   const today = new Date(); today.setHours(0,0,0,0);
 
+  // Handlers
   const handleDeleteClick = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(id); };
   const handleConfirmDelete = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); onDelete(id); setConfirmDeleteId(null); };
   const handleCancelDelete = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(null); };
@@ -53,11 +59,14 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
   return (
       <div className="border border-gray-200 dark:border-gray-800 rounded-sm w-full bg-white dark:bg-gray-950 transition-colors">
         <div className="w-full text-left text-xs border-collapse">
+            
+            {/* --- Header --- */}
             <div className="flex bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400 font-mono uppercase tracking-wider text-[10px]">
                 <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium flex-1">Desc</div>
                 <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium text-right w-28">Amt</div>
             </div>
 
+            {/* --- Body --- */}
             <div className="divide-y divide-gray-100 dark:divide-gray-800 font-mono">
                 {sortedPlans.map(plan => {
                     const isExpanded = expandedId === plan.id;
@@ -70,6 +79,8 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
 
                     return (
                         <div key={plan.id} className="group flex flex-col hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
+                            
+                            {/* Main Row */}
                             <div className="flex items-center cursor-pointer py-1" onClick={() => toggleRow(plan.id)}>
                                 <div className="px-2 flex-1 min-w-0 flex items-center gap-2">
                                     <div className={`w-1 h-4 rounded-sm ${plan.type === 'income' ? 'bg-emerald-600 dark:bg-emerald-800' : 'bg-rose-600 dark:bg-rose-800'}`}></div>
@@ -80,12 +91,16 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
                                     {plan.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </div>
                             </div>
+
+                            {/* Expanded Details Panel */}
                             {isExpanded && (
                                 <div className="bg-gray-50 dark:bg-gray-900/50 px-2 py-2 text-[11px] text-gray-500 border-t border-gray-100 dark:border-gray-800/50 flex flex-col gap-2 cursor-default" onClick={(e) => e.stopPropagation()}>
                                     <div className="flex justify-between items-center">
                                         <span>Due: <span className={isFuture ? 'text-indigo-600 dark:text-indigo-300' : 'text-emerald-600 dark:text-emerald-300'}>{nextDate.toLocaleDateString()}</span></span>
                                         <span className="uppercase text-[9px] border border-gray-300 dark:border-gray-700 rounded px-1">{plan.frequency}</span>
                                     </div>
+                                    
+                                    {/* Progress Bar for Loans */}
                                     {plan.maxOccurrences && (
                                         <div className="flex items-center gap-2 text-[10px]">
                                             <span>Progress: {plan.occurrencesGenerated} / {plan.maxOccurrences}</span>
@@ -94,6 +109,8 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
                                             </div>
                                         </div>
                                     )}
+
+                                    {/* Action Buttons */}
                                     <div className="flex gap-2 pt-1 border-t border-gray-200 dark:border-gray-800/50 mt-1 relative z-10">
                                         {isDeleting ? (
                                             <>
