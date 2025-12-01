@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Transaction, RecurringPlan, Frequency, FinancialSnapshot } from './types';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, BackupData } from './types';
 import TransactionGrid from './components/TransactionGrid';
 import SummaryBar from './components/SummaryBar';
 import AddTransactionModal from './components/AddTransactionModal';
 import PlanList from './components/PlanList';
 import ConfirmModal from './components/ConfirmModal';
+import SettingsModal from './components/SettingsModal';
+import * as BackupService from './services/backupService';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -25,9 +27,6 @@ const addTime = (date: string | Date, freq: Frequency, count: number): Date => {
     const startDay = d.getDate();
 
     if (freq === Frequency.ONE_TIME) {
-        // One-time plans don't advance. They just exist at their start date.
-        // If count > 0, it means we are past the first occurrence. 
-        // Logic outside this function handles whether to show it (maxOccurrences).
         return d;
     }
 
@@ -35,20 +34,14 @@ const addTime = (date: string | Date, freq: Frequency, count: number): Date => {
         d.setDate(d.getDate() + (7 * count));
     }
     if (freq === Frequency.MONTHLY) {
-        // Add months
         d.setMonth(d.getMonth() + count);
-        
-        // Check for overflow (e.g. Jan 31 + 1 month -> March 3 in JS)
-        // If the day of month has changed, it means we overflowed the target month.
+        // Check for overflow
         if (d.getDate() !== startDay) {
-            // Set to the last day of the previous month (which is the target month)
-            // d.setDate(0) sets the date to the 0th day of the current month, which is the last day of the prev month.
             d.setDate(0);
         }
     }
     if (freq === Frequency.YEARLY) {
         d.setFullYear(d.getFullYear() + count);
-        // Check for leap year edge case (Feb 29 -> Feb 28 in non-leap year)
         if (d.getDate() !== startDay) {
              d.setDate(0);
         }
@@ -72,10 +65,11 @@ export default function App() {
       return saved ? parseInt(saved, 10) : 1;
   });
 
-  // Controls the 'anchor' date for the current view. Defaults to today, but can shift if applying future payments.
+  // Controls the 'anchor' date for the current view.
   const [viewDate, setViewDate] = useState<Date>(() => new Date());
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Transaction | RecurringPlan | null>(null);
 
   // Collapsible states
@@ -84,6 +78,9 @@ export default function App() {
 
   // State for cycle shift confirmation
   const [shiftCycleDialog, setShiftCycleDialog] = useState<{ isOpen: boolean, planId: string, newDate: Date } | null>(null);
+
+  // Auto-backup Debounce Ref
+  const backupTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     localStorage.setItem('transactions', JSON.stringify(transactions));
@@ -97,6 +94,38 @@ export default function App() {
       localStorage.setItem('cycleStartDay', cycleStartDay.toString());
   }, [cycleStartDay]);
 
+  // Auto Backup Effect (Native Filesystem)
+  useEffect(() => {
+    // Check if auto-backup is enabled
+    const autoBackupEnabled = localStorage.getItem('native_auto_backup') === 'true';
+    if (!autoBackupEnabled) return;
+
+    if (backupTimeoutRef.current) {
+        clearTimeout(backupTimeoutRef.current);
+    }
+
+    // Debounce 2 seconds
+    backupTimeoutRef.current = window.setTimeout(async () => {
+        const data: BackupData = {
+            version: 1,
+            timestamp: Date.now(),
+            transactions,
+            plans,
+            cycleStartDay
+        };
+        try {
+            await BackupService.saveToDevice(data);
+            console.log("Auto-backup to device successful");
+        } catch (e) {
+            console.log("Auto-backup failed (Permissions?)");
+        }
+    }, 2000);
+
+    return () => {
+        if (backupTimeoutRef.current) clearTimeout(backupTimeoutRef.current);
+    }
+  }, [transactions, plans, cycleStartDay]);
+
   const snapshot: FinancialSnapshot = useMemo(() => {
     const currentBalance = transactions.reduce((acc, t) => {
         return t.type === 'income' ? acc + t.amount : acc - t.amount;
@@ -105,31 +134,22 @@ export default function App() {
     const today = new Date();
     today.setHours(0,0,0,0);
     
-    // Anchor determines which period we are viewing. 
-    // Usually 'today', but can be pushed forward by actions.
     const anchor = new Date(viewDate);
     anchor.setHours(0,0,0,0);
     
-    // Calculate Period Start and End based on cycleStartDay relative to the anchor date
     let periodStart = new Date(anchor.getFullYear(), anchor.getMonth(), cycleStartDay);
     
-    // If anchor day is before the start day (e.g. anchor is 5th, start is 15th), 
-    // we are in the period that started last month.
     if (anchor.getDate() < cycleStartDay) {
         periodStart = new Date(anchor.getFullYear(), anchor.getMonth() - 1, cycleStartDay);
-        // Handle overflow if previous month didn't have that day (e.g. Start day 31, prev month Feb)
         if (periodStart.getDate() !== cycleStartDay) {
-             // If we wanted day 31 but got March 3, roll back to last day of Feb
              periodStart = new Date(anchor.getFullYear(), anchor.getMonth() - 1 + 1, 0);
         }
     } else {
-         // Handle overflow if current month doesn't have that day
          if (periodStart.getDate() !== cycleStartDay) {
             periodStart = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
          }
     }
     
-    // Period end is 1 month after start, minus 1 day.
     const periodEnd = new Date(periodStart);
     periodEnd.setMonth(periodEnd.getMonth() + 1);
     periodEnd.setDate(periodEnd.getDate() - 1);
@@ -154,8 +174,6 @@ export default function App() {
             if (plan.maxOccurrences && simCount >= plan.maxOccurrences) break;
             if (plan.endDate && currentDate > new Date(plan.endDate)) break;
 
-            // Only count if it's in the future (or today) relative to REAL TIME today,
-            // even if we are viewing a future period.
             if (currentDate >= today) {
                 if (plan.type === 'income') {
                     upcomingIncome += plan.amount;
@@ -166,11 +184,8 @@ export default function App() {
                 }
             }
             
-            // Increment for next loop
             simCount++;
             simDate = addTime(plan.startDate, plan.frequency, simCount);
-            
-            // For One-Time frequency, loop needs to break after one check or rely on maxOccurrences
             if (plan.frequency === Frequency.ONE_TIME) break;
         }
     });
@@ -237,6 +252,12 @@ export default function App() {
     }
   };
 
+  const handleImportData = (data: BackupData) => {
+      if (data.transactions) setTransactions(data.transactions);
+      if (data.plans) setPlans(data.plans);
+      if (data.cycleStartDay) setCycleStartDay(data.cycleStartDay);
+  };
+
   const handleEditTransaction = (tx: Transaction) => {
       setEditingItem(tx);
       setIsModalOpen(true);
@@ -257,7 +278,6 @@ export default function App() {
       setViewDate(date);
   };
 
-  // Central logic to add the transaction
   const executePlanApplication = (planId: string, applyDate: Date) => {
     const plan = plans.find(p => p.id === planId);
     if (!plan) return;
@@ -302,13 +322,11 @@ export default function App() {
     const nextPeriodEnd = new Date(currentPeriodEnd);
     nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 1);
     
-    // Safety check for applying waaaay in the future
     if (newDate > nextPeriodEnd) {
         alert(`Cannot apply this payment yet. It is due on ${newDate.toLocaleDateString()}, which is beyond the next billing cycle.`);
         return;
     }
     
-    // If the payment falls after the current period, request confirmation to shift cycle
     if (newDate > currentPeriodEnd) {
         setShiftCycleDialog({
             isOpen: true,
@@ -316,7 +334,6 @@ export default function App() {
             newDate
         });
     } else {
-        // Immediate execution if in current period
         executePlanApplication(planId, newDate);
     }
   };
@@ -325,7 +342,7 @@ export default function App() {
       if (shiftCycleDialog) {
           const day = shiftCycleDialog.newDate.getDate();
           setCycleStartDay(day);
-          setViewDate(shiftCycleDialog.newDate); // Update period view to the future date
+          setViewDate(shiftCycleDialog.newDate);
           executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate);
           setShiftCycleDialog(null);
       }
@@ -333,29 +350,23 @@ export default function App() {
 
   const handleAlternativeKeepCycle = () => {
       if (shiftCycleDialog) {
-          // User selected "No, Keep Current"
-          // We apply the payment, but DO NOT shift the cycle or view
           executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate);
           setShiftCycleDialog(null);
       }
   };
 
   const handleAbort = () => {
-      // User selected "Cancel" - Do nothing
       setShiftCycleDialog(null);
   };
 
   const deleteTransaction = (id: string) => {
-    // Check if this transaction is linked to a plan
     const txToDelete = transactions.find(t => t.id === id);
 
     if (txToDelete && txToDelete.relatedPlanId) {
-        // Revert the plan progress
         setPlans(prev => prev.map(p => {
             if (p.id === txToDelete.relatedPlanId) {
                 return {
                     ...p,
-                    // Decrement occurrences, ensuring we don't go below 0
                     occurrencesGenerated: Math.max(0, p.occurrencesGenerated - 1)
                 };
             }
@@ -370,11 +381,21 @@ export default function App() {
       setPlans(prev => prev.filter(p => p.id !== id));
   };
 
+  // Prepare backup object for settings modal
+  const currentBackupData: BackupData = {
+      version: 1,
+      timestamp: Date.now(),
+      transactions,
+      plans,
+      cycleStartDay
+  };
+
   return (
     <div className="min-h-screen pb-20 bg-black text-gray-300 font-sans">
       <SummaryBar 
         snapshot={snapshot} 
         onUpdateDate={handleUpdateBillingDate}
+        onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
       <main className="max-w-4xl mx-auto px-4 pt-4">
@@ -452,7 +473,13 @@ export default function App() {
         initialData={editingItem}
       />
 
-      {/* Confirmation Modal for Billing Cycle Shift */}
+      <SettingsModal 
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        dataToBackup={currentBackupData}
+        onImport={handleImportData}
+      />
+
       <ConfirmModal 
         isOpen={!!shiftCycleDialog}
         title="Next Billing Cycle?"

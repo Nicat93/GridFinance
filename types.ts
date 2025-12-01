@@ -41,3 +41,11 @@ export interface FinancialSnapshot {
   periodStart: Date;
   periodEnd: Date;
 }
+
+export interface BackupData {
+  version: number;
+  timestamp: number;
+  transactions: Transaction[];
+  plans: RecurringPlan[];
+  cycleStartDay: number;
+}
