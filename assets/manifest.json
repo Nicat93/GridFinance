@@ -1,10 +1,9 @@
-
 {
   "name": "GridFinance",
   "short_name": "GridFin",
   "id": "com.gridfinance.app",
   "description": "A dense, dark-themed spreadsheet-style finance tracker with recurring payments, installment planning, and syncing.",
-  "start_url": "./index.html",
+  "start_url": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#030712",
