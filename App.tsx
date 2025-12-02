@@ -340,7 +340,8 @@ export default function App() {
           setPlans([]);
           setDeletedIds({});
           setCycleStartDay(1);
-          setIsSettingsOpen(false);
+          // Force full resync by resetting timestamp
+          setSyncConfig(prev => ({ ...prev, lastSyncedAt: 0 }));
       }
   };
 
@@ -380,6 +381,9 @@ export default function App() {
             setPlans(data.plans);
             if (data.cycleStartDay) setCycleStartDay(data.cycleStartDay);
             if (data.deletedIds) setDeletedIds(data.deletedIds);
+            
+            // Force push of imported data on next sync by resetting sync time
+            setSyncConfig(prev => ({ ...prev, lastSyncedAt: 0 }));
             
             setIsSettingsOpen(false);
             alert("Import successful.");
