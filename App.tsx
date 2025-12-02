@@ -530,7 +530,7 @@ export default function App() {
 
       {/* Version Footer */}
       <div className="fixed bottom-1 w-full flex justify-center pointer-events-none select-none z-0">
-          <span className="text-[10px] font-mono font-bold text-gray-500 dark:text-gray-500 opacity-80">
+          <span className="text-[10px] font-mono font-bold text-gray-500 dark:text-gray-500 opacity-40">
             v{APP_VERSION}
           </span>
       </div>
@@ -556,7 +556,13 @@ export default function App() {
       </button>
 
       {/* Modals */}
-      <AddTransactionModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingItem(null); }} onSave={handleSaveData} initialData={editingItem} />
+      <AddTransactionModal 
+        isOpen={isModalOpen} 
+        onClose={() => { setIsModalOpen(false); setEditingItem(null); }} 
+        onSave={handleSaveData} 
+        initialData={editingItem} 
+        transactions={transactions}
+      />
       <SettingsModal 
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)} 

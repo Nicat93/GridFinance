@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { Frequency, TransactionType, Transaction, RecurringPlan } from '../types';
 
 interface Props {
@@ -6,9 +7,10 @@ interface Props {
   onClose: () => void;
   onSave: (data: any) => void;
   initialData?: Transaction | RecurringPlan | null;
+  transactions?: Transaction[];
 }
 
-const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initialData }) => {
+const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initialData, transactions = [] }) => {
   const [type, setType] = useState<TransactionType>('expense');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -19,6 +21,24 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   const [frequency, setFrequency] = useState<Frequency>(Frequency.MONTHLY);
   const [maxOccurrences, setMaxOccurrences] = useState('');
   const [isInstallment, setIsInstallment] = useState(false);
+
+  // Generate unique list of descriptions for autocomplete
+  const descriptionSuggestions = useMemo(() => {
+    if (!transactions) return [];
+    const unique = new Set<string>();
+    const suggestions: string[] = [];
+    
+    // Iterate through transactions, keeping only unique descriptions
+    for (const tx of transactions) {
+        const desc = tx.description?.trim();
+        if (desc && !unique.has(desc)) {
+            unique.add(desc);
+            suggestions.push(desc);
+        }
+    }
+    // Sort alphabetically for the dropdown
+    return suggestions.sort();
+  }, [transactions]);
 
   useEffect(() => {
     if (isOpen) {
@@ -137,14 +157,23 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
              </div>
           </div>
 
-          <input 
-            type="text" 
-            required
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            className="w-full bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-300 px-3 py-2 rounded text-base focus:border-indigo-500 focus:outline-none transition-colors"
-            placeholder="Description (e.g. Rent)"
-          />
+          <div>
+            <input 
+                type="text" 
+                required
+                list="description-suggestions"
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                className="w-full bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-300 px-3 py-2 rounded text-base focus:border-indigo-500 focus:outline-none transition-colors"
+                placeholder="Description (e.g. Rent)"
+                autoComplete="off"
+            />
+            <datalist id="description-suggestions">
+                {descriptionSuggestions.map((desc, idx) => (
+                    <option key={idx} value={desc} />
+                ))}
+            </datalist>
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <input 
