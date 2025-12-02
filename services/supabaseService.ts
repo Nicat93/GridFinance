@@ -30,13 +30,19 @@ export const initSupabase = (url: string, key: string) => {
 export const pullChanges = async (config: SyncConfig, lastSyncedAt: number) => {
     if (!supabase || !config.syncId) return null;
 
+    // SAFETY BUFFER: Subtract 5 minutes (300,000ms) from lastSyncedAt.
+    // This accounts for clock skew between devices. If Device A is 2 mins behind Device B,
+    // Device B might otherwise miss Device A's updates. 
+    // Since mergeDeltas handles duplicates safely, fetching overlapping data is fine.
+    const bufferedTimestamp = Math.max(0, lastSyncedAt - 300000);
+
     try {
         // 1. Fetch changed Transactions
         const { data: txRows, error: txError } = await supabase
             .from('grid_transactions')
             .select('*')
             .eq('sync_id', config.syncId)
-            .gt('updated_at', lastSyncedAt);
+            .gt('updated_at', bufferedTimestamp);
 
         if (txError) throw txError;
 
@@ -45,7 +51,7 @@ export const pullChanges = async (config: SyncConfig, lastSyncedAt: number) => {
             .from('grid_plans')
             .select('*')
             .eq('sync_id', config.syncId)
-            .gt('updated_at', lastSyncedAt);
+            .gt('updated_at', bufferedTimestamp);
             
         if (planError) throw planError;
 
@@ -104,20 +110,6 @@ export const pushChanges = async (
     // Add Deletions (Transactions)
     Object.entries(deletedIds).forEach(([id, ts]) => {
         if (ts > lastSyncedAt) {
-            // We don't know if it was a plan or transaction, so we try to tombstone both tables 
-            // or we could track type. For simplicity in this schema, we just upsert a deletion.
-            // However, to save bandwidth, strict type tracking is better. 
-            // Here, we'll just push to transactions table as a tombstone. 
-            // (If it was a plan, we might need to check. But mostly ID collision is rare).
-            // Let's check our local state? No, it's deleted. 
-            // Safe bet: Upsert to Transactions table. If it was a plan, it won't be found there usually.
-            // *Optimization*: In a perfect world, we store type in deletedIds.
-            // *Pragmatic*: Push to both if we don't know, OR just push to Transactions and let Plans linger? No.
-            // Let's push to Transactions. If the ID exists in Plans, it won't be deleted. 
-            // Actually, we should push to the table where it existed.
-            // Since we lack that info in `deletedIds` (it's just ID:TS), we will try to push a deletion marker to BOTH tables.
-            // This ensures it gets killed wherever it lived.
-            
             txUpserts.push({
                 sync_id: config.syncId,
                 id: id,
@@ -139,7 +131,7 @@ export const pushChanges = async (
             deleted: false
         }));
     
-    // Add Deletions (Plans) - duplicate logic from above to ensure coverage
+    // Add Deletions (Plans)
     const planDeletes: any[] = [];
     Object.entries(deletedIds).forEach(([id, ts]) => {
         if (ts > lastSyncedAt) {
@@ -168,9 +160,6 @@ export const pushChanges = async (
         }
 
         // 3. Upsert Metadata (only if changed)
-        // We check if we have a way to know if cycle day changed. 
-        // For now, we push it if any transaction changed, or we could track `metaModified`.
-        // Let's assume if there are ANY changes, we sync metadata to be safe, or just always sync it (it's small).
         if (txUpserts.length > 0 || planUpserts.length > 0) {
              const { error } = await supabase.from('grid_metadata').upsert({
                 sync_id: config.syncId,
@@ -258,7 +247,6 @@ export const mergeDeltas = (
     };
 };
 
-// Legacy exports to satisfy imports if any, though we replaced usage
 export const mergeData = (l: any, r: any) => l; 
 export const fetchRemoteData = async (c: any) => null;
 export const pushRemoteData = async (c: any, d: any) => false;

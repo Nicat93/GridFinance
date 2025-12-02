@@ -123,28 +123,32 @@ export default function App() {
   // --- Sync Logic ---
 
   // Ref to hold current state for async operations to avoid stale closures
-  const stateRef = useRef({ transactions, plans, cycleStartDay, deletedIds });
+  // Including syncConfig allows us to read the latest config without adding it to dependency array
+  const stateRef = useRef({ transactions, plans, cycleStartDay, deletedIds, syncConfig });
   useEffect(() => {
-      stateRef.current = { transactions, plans, cycleStartDay, deletedIds };
-  }, [transactions, plans, cycleStartDay, deletedIds]);
+      stateRef.current = { transactions, plans, cycleStartDay, deletedIds, syncConfig };
+  }, [transactions, plans, cycleStartDay, deletedIds, syncConfig]);
 
   /**
    * Optimized Delta Sync Function
    */
   const triggerSync = useCallback(async () => {
-      if (!syncConfig.enabled || !syncConfig.syncId) return;
+      // Read latest config from ref
+      const currentConfig = stateRef.current.syncConfig;
+      
+      if (!currentConfig.enabled || !currentConfig.syncId) return;
       if (isSyncingRef.current) return;
       
       isSyncingRef.current = true;
       setSyncStatus('syncing');
       
       const currentLocalState = stateRef.current;
-      const lastSyncedAt = syncConfig.lastSyncedAt || 0;
+      const lastSyncedAt = currentConfig.lastSyncedAt || 0;
       const syncStartTime = Date.now();
 
       try {
           // 1. PULL Deltas (Only items changed on server since lastSyncedAt)
-          const remoteChanges = await SupabaseService.pullChanges(syncConfig, lastSyncedAt);
+          const remoteChanges = await SupabaseService.pullChanges(currentConfig, lastSyncedAt);
           
           let mergedTransactions = currentLocalState.transactions;
           let mergedPlans = currentLocalState.plans;
@@ -186,7 +190,7 @@ export default function App() {
 
           // 3. PUSH Deltas (Only items changed locally since lastSyncedAt)
           const success = await SupabaseService.pushChanges(
-              syncConfig, 
+              currentConfig, 
               mergedTransactions, 
               mergedPlans, 
               mergedDeletedIds, 
@@ -208,7 +212,7 @@ export default function App() {
       } finally {
           isSyncingRef.current = false;
       }
-  }, [syncConfig]);
+  }, []); // Stable function, depends on nothing (reads refs)
 
   // Initialize Client & Trigger Initial Sync
   useEffect(() => {
@@ -221,7 +225,9 @@ export default function App() {
       } else {
           setSyncStatus('offline');
       }
-  }, [syncConfig.enabled, syncConfig.supabaseUrl, syncConfig.supabaseKey, triggerSync]);
+      // Only re-run if enable status, keys, or syncId changes. 
+      // Do NOT include syncConfig.lastSyncedAt to avoid infinite loops.
+  }, [syncConfig.enabled, syncConfig.supabaseUrl, syncConfig.supabaseKey, syncConfig.syncId, triggerSync]);
 
   // Auto Sync on Data Change (Debounced)
   useEffect(() => {
