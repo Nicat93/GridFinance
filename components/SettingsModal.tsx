@@ -14,20 +14,23 @@ interface Props {
   onImportData: (file: File) => void;
   installPromptAvailable?: boolean;
   onInstallApp?: () => void;
+  isStandalone?: boolean;
 }
 
 const SettingsModal: React.FC<Props> = ({ 
     isOpen, onClose, isDarkMode, onToggleTheme, syncConfig, onSaveSyncConfig, onClearData,
-    onExportData, onImportData, installPromptAvailable, onInstallApp
+    onExportData, onImportData, installPromptAvailable, onInstallApp, isStandalone
 }) => {
   const [syncId, setSyncId] = useState(syncConfig.syncId || '');
   const [enabled, setEnabled] = useState(syncConfig.enabled);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
       if (isOpen) {
           setSyncId(syncConfig.syncId || '');
           setEnabled(syncConfig.enabled);
+          setShowInstallHelp(false);
       }
   }, [isOpen, syncConfig]);
 
@@ -40,6 +43,14 @@ const SettingsModal: React.FC<Props> = ({
           lastSyncedAt: 0
       });
       onClose();
+  };
+
+  const handleInstallClick = () => {
+      if (installPromptAvailable && onInstallApp) {
+          onInstallApp();
+      } else {
+          setShowInstallHelp(true);
+      }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -68,17 +79,26 @@ const SettingsModal: React.FC<Props> = ({
 
         <div className="p-5 space-y-6 overflow-y-auto max-h-[80vh]">
             
-            {/* Install App (Only if prompt available) */}
-            {installPromptAvailable && onInstallApp && (
+            {/* Install App (Show if NOT standalone) */}
+            {!isStandalone && (
                 <div className="space-y-3">
                      <button 
-                        onClick={onInstallApp}
+                        onClick={handleInstallClick}
                         className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 text-white rounded-lg shadow-lg hover:bg-indigo-500 transition-colors font-bold"
                     >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                         Install App
                     </button>
-                    <p className="text-[10px] text-center text-gray-400">Install to home screen for offline access and better performance.</p>
+                    
+                    {showInstallHelp ? (
+                        <div className="bg-gray-100 dark:bg-gray-900 p-3 rounded text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed border border-gray-200 dark:border-gray-800">
+                           <strong>Browser Install:</strong><br/>
+                           • <strong>iOS (Safari):</strong> Tap 'Share' <span className="inline-block align-text-bottom"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg></span> → 'Add to Home Screen'.<br/>
+                           • <strong>Android (Firefox):</strong> Tap Menu (⋮) → 'Install'.
+                        </div>
+                    ) : (
+                        <p className="text-[10px] text-center text-gray-400">Install to home screen for offline access.</p>
+                    )}
                 </div>
             )}
 

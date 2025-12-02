@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'grid-finance-v8';
+const CACHE_NAME = 'grid-finance-v9';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -38,44 +38,47 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch Event: Network First for HTML/JS (to ensure updates), Cache First for others
+// Fetch Event
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Strategy: Network First -> Fallback to Cache
-  // Applies to HTML navigation and our main JS bundle to ensure the latest version is seen.
-  if (event.request.mode === 'navigate' || url.pathname.endsWith('index.html') || url.pathname.endsWith('index.js')) {
+  // 1. Navigation Requests (HTML) - SPA Pattern
+  // Always try network first, fallback to cached index.html if offline or 404
+  if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
-        .then((response) => {
-          // Check if we received a valid response
-          if (!response || response.status !== 200 || response.type !== 'basic' && response.type !== 'cors') {
-            return response;
-          }
-
-          // Clone the response to update the cache
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-
-          return response;
-        })
         .catch(() => {
-          // If network fails, try cache
-          return caches.match(event.request);
+          // If network fails, return the cached index.html to load the app
+          return caches.match('./index.html');
         })
     );
-  } else {
-    // Strategy: Cache First -> Fallback to Network
-    // Applies to images, styles, external CDNs (like Tailwind)
-    event.respondWith(
-      caches.match(event.request).then((response) => {
-        if (response) {
-          return response;
-        }
-        return fetch(event.request);
-      })
-    );
+    return;
   }
+
+  // 2. Critical Assets (Main JS) - Network First to ensure updates
+  if (url.pathname.endsWith('index.js')) {
+     event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+           // Update cache if valid
+           if (response && response.status === 200) {
+             const responseToCache = response.clone();
+             caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
+           }
+           return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // 3. Static Assets / Images - Cache First
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      if (response) {
+        return response;
+      }
+      return fetch(event.request);
+    })
+  );
 });
