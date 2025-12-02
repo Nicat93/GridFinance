@@ -1,14 +1,13 @@
 
-const CACHE_NAME = 'grid-finance-v9';
+const CACHE_NAME = 'grid-finance-v10';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
   './assets/index.js',
+  './icon.svg',
   // Cache the CDN for offline use
-  'https://cdn.tailwindcss.com',
-  // Cache the icon so PWA install check passes offline
-  'https://cdn-icons-png.flaticon.com/512/2344/2344132.png'
+  'https://cdn.tailwindcss.com'
 ];
 
 // Install Event: Cache assets
@@ -49,7 +48,10 @@ self.addEventListener('fetch', (event) => {
       fetch(event.request)
         .catch(() => {
           // If network fails, return the cached index.html to load the app
-          return caches.match('./index.html');
+          // Check multiple paths to ensure we hit the cache
+          return caches.match('./index.html').then(response => {
+            return response || caches.match('index.html');
+          });
         })
     );
     return;
