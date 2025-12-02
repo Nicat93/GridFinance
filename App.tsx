@@ -8,10 +8,7 @@ import PlanList from './components/PlanList';
 import ConfirmModal from './components/ConfirmModal';
 import SettingsModal from './components/SettingsModal';
 import * as SupabaseService from './services/supabaseService';
-
-// Injected by Vite
-// We use a defensive check in the component to handle cases where this isn't defined
-declare const __APP_VERSION__: string | undefined;
+import { APP_VERSION } from './version';
 
 // --- Utility Functions ---
 
@@ -108,9 +105,6 @@ export default function App() {
   const syncTimeoutRef = useRef<number | null>(null);
   const isSyncingRef = useRef(false);
   const isFirstMount = useRef(true);
-
-  // Safe access to version
-  const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0';
 
   // --- Effects: Persistence ---
   useEffect(() => { localStorage.setItem('transactions', JSON.stringify(transactions)); }, [transactions]);
@@ -527,7 +521,7 @@ export default function App() {
       {/* Version Footer */}
       <div className="fixed bottom-1 w-full flex justify-center pointer-events-none select-none z-0">
           <span className="text-[10px] font-mono font-bold text-gray-400/20 dark:text-gray-600/20">
-            v{appVersion}
+            v{APP_VERSION}
           </span>
       </div>
       

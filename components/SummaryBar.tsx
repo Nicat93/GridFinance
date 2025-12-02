@@ -1,3 +1,4 @@
+
 import React, { useRef } from 'react';
 import { FinancialSnapshot, SyncStatus } from '../types';
 
@@ -52,7 +53,7 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus }) => 
   };
 
   return (
-    <div className="sticky top-0 z-30 bg-white/95 dark:bg-black/95 backdrop-blur border-b border-gray-200 dark:border-gray-800 px-2 py-2 shadow-lg transition-colors">
+    <div className="sticky top-0 z-30 bg-white/95 dark:bg-black/95 backdrop-blur border-b border-gray-200 dark:border-gray-800 px-2 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] shadow-lg transition-colors">
       <div className="max-w-4xl mx-auto flex items-center justify-between relative">
         
         {/* Current */}
