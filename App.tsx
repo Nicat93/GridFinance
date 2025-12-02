@@ -106,6 +106,9 @@ export default function App() {
   const isSyncingRef = useRef(false);
   const isFirstMount = useRef(true);
 
+  // --- PWA Install State ---
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
   // --- Effects: Persistence ---
   useEffect(() => { localStorage.setItem('transactions', JSON.stringify(transactions)); }, [transactions]);
   useEffect(() => { localStorage.setItem('plans', JSON.stringify(plans)); }, [plans]);
@@ -119,6 +122,34 @@ export default function App() {
       if (isDarkMode) document.documentElement.classList.add('dark');
       else document.documentElement.classList.remove('dark');
   }, [isDarkMode]);
+
+  // --- Effect: PWA Install Prompt ---
+  useEffect(() => {
+    const handler = (e: Event) => {
+      // Prevent the mini-infobar from appearing on mobile
+      e.preventDefault();
+      // Stash the event so it can be triggered later.
+      setDeferredPrompt(e);
+      console.log("PWA Install Prompt Captured");
+    };
+
+    window.addEventListener('beforeinstallprompt', handler);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+    };
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (!deferredPrompt) return;
+    // Show the install prompt
+    deferredPrompt.prompt();
+    // Wait for the user to respond to the prompt
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`User response to the install prompt: ${outcome}`);
+    // We've used the prompt, and can't use it again, throw it away
+    setDeferredPrompt(null);
+  };
 
   // --- Sync Logic ---
 
@@ -567,6 +598,8 @@ export default function App() {
         onClearData={handleClearData}
         onExportData={handleExportData}
         onImportData={handleImportData}
+        installPromptAvailable={!!deferredPrompt}
+        onInstallApp={handleInstallApp}
       />
       <ConfirmModal 
         isOpen={!!shiftCycleDialog} title="Next Billing Cycle?" message={`This payment (${shiftCycleDialog?.newDate.toLocaleDateString()}) falls in the next billing cycle. Shift cycle start to ${shiftCycleDialog?.newDate.getDate()}th?`}

@@ -1,12 +1,14 @@
 
-const CACHE_NAME = 'grid-finance-v7';
+const CACHE_NAME = 'grid-finance-v8';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
   './assets/index.js',
   // Cache the CDN for offline use
-  'https://cdn.tailwindcss.com'
+  'https://cdn.tailwindcss.com',
+  // Cache the icon so PWA install check passes offline
+  'https://cdn-icons-png.flaticon.com/512/2344/2344132.png'
 ];
 
 // Install Event: Cache assets

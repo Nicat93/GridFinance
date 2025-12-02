@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { SyncConfig } from '../types';
 
@@ -13,11 +12,13 @@ interface Props {
   onClearData: () => void;
   onExportData: () => void;
   onImportData: (file: File) => void;
+  installPromptAvailable?: boolean;
+  onInstallApp?: () => void;
 }
 
 const SettingsModal: React.FC<Props> = ({ 
     isOpen, onClose, isDarkMode, onToggleTheme, syncConfig, onSaveSyncConfig, onClearData,
-    onExportData, onImportData
+    onExportData, onImportData, installPromptAvailable, onInstallApp
 }) => {
   const [syncId, setSyncId] = useState(syncConfig.syncId || '');
   const [enabled, setEnabled] = useState(syncConfig.enabled);
@@ -67,6 +68,20 @@ const SettingsModal: React.FC<Props> = ({
 
         <div className="p-5 space-y-6 overflow-y-auto max-h-[80vh]">
             
+            {/* Install App (Only if prompt available) */}
+            {installPromptAvailable && onInstallApp && (
+                <div className="space-y-3">
+                     <button 
+                        onClick={onInstallApp}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 text-white rounded-lg shadow-lg hover:bg-indigo-500 transition-colors font-bold"
+                    >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        Install App
+                    </button>
+                    <p className="text-[10px] text-center text-gray-400">Install to home screen for offline access and better performance.</p>
+                </div>
+            )}
+
             {/* Appearance */}
             <div className="space-y-3">
                 <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Appearance</h3>
