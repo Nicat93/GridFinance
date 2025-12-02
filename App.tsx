@@ -560,8 +560,7 @@ export default function App() {
         isOpen={isModalOpen} 
         onClose={() => { setIsModalOpen(false); setEditingItem(null); }} 
         onSave={handleSaveData} 
-        initialData={editingItem} 
-        transactions={transactions}
+        initialData={editingItem}
       />
       <SettingsModal 
         isOpen={isSettingsOpen} 
