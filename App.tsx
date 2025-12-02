@@ -530,7 +530,7 @@ export default function App() {
 
       {/* Version Footer */}
       <div className="fixed bottom-1 w-full flex justify-center pointer-events-none select-none z-0">
-          <span className="text-[10px] font-mono font-bold text-gray-400/40 dark:text-gray-600/40">
+          <span className="text-[10px] font-mono font-bold text-gray-500 dark:text-gray-500 opacity-80">
             v{APP_VERSION}
           </span>
       </div>
