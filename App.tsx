@@ -311,8 +311,9 @@ export default function App() {
             if (plan.maxOccurrences && simCount >= plan.maxOccurrences) break;
             if (plan.endDate && currentDate > new Date(plan.endDate)) break;
             
-            // Only add to projection if it's in the future (>= today)
-            if (currentDate >= today) {
+            // Only add to projection if it's within the current period
+            // (Even if slightly in the past, e.g. day 1 of month when today is day 3)
+            if (currentDate >= periodStart) {
                 if (plan.type === 'income') { 
                     upcomingIncome += plan.amount; 
                     projectedBalance += plan.amount; 
