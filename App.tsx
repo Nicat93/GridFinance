@@ -51,12 +51,32 @@ export default function App() {
   // --- State: Data ---
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     const saved = localStorage.getItem('transactions');
-    return saved ? JSON.parse(saved) : [];
+    let parsed: any[] = saved ? JSON.parse(saved) : [];
+    // Migration: Map old 'name' to 'description' if present
+    return parsed.map((t: any) => {
+        // If coming from version with 'name', prefer name as description
+        const desc = t.name || t.description || 'Unknown';
+        // Clean up object by removing name property if it exists
+        const { name, ...rest } = t;
+        return {
+            ...rest,
+            description: desc
+        };
+    });
   });
   
   const [plans, setPlans] = useState<RecurringPlan[]>(() => {
     const saved = localStorage.getItem('plans');
-    return saved ? JSON.parse(saved) : [];
+    let parsed: any[] = saved ? JSON.parse(saved) : [];
+    // Migration
+    return parsed.map((p: any) => {
+        const desc = p.name || p.description || 'Unknown';
+        const { name, ...rest } = p;
+        return {
+            ...rest,
+            description: desc
+        };
+    });
   });
 
   const [cycleStartDay, setCycleStartDay] = useState<number>(() => {
@@ -113,6 +133,16 @@ export default function App() {
   const syncTimeoutRef = useRef<number | null>(null);
   const isSyncingRef = useRef(false);
   const isFirstMount = useRef(true);
+
+  // --- Derived State ---
+  const uniqueCategories = useMemo(() => {
+      const cats = new Set<string>();
+      // Pre-populate with defaults
+      ['Food', 'Housing', 'Transport', 'Utilities', 'Entertainment', 'Salary', 'Freelance'].forEach(c => cats.add(c));
+      transactions.forEach(t => { if(t.category) cats.add(t.category) });
+      plans.forEach(p => { if(p.category) cats.add(p.category) });
+      return Array.from(cats).sort();
+  }, [transactions, plans]);
 
   // --- Effects: Persistence ---
   useEffect(() => { localStorage.setItem('transactions', JSON.stringify(transactions)); }, [transactions]);
@@ -349,15 +379,15 @@ export default function App() {
       const newPlans: RecurringPlan[] = [];
       const now = Date.now();
       const categories = ['Food', 'Transport', 'Housing', 'Utilities', 'Entertainment', 'Salary', 'Freelance'];
-      const types: TransactionType[] = ['income', 'expense'];
       const freqs: Frequency[] = [Frequency.MONTHLY, Frequency.WEEKLY, Frequency.YEARLY, Frequency.ONE_TIME];
 
       for (let i = 0; i < 200; i++) {
           const type = Math.random() > 0.7 ? 'income' : 'expense';
+          const desc = `Mock ${type === 'income' ? 'Income' : 'Expense'} ${i}`;
           newTxs.push({
               id: generateId(),
               date: new Date(Date.now() - Math.random() * 31536000000).toISOString().split('T')[0], // Last year
-              description: `Mock Transaction ${i}`,
+              description: desc,
               amount: parseFloat((Math.random() * 1000).toFixed(2)),
               type: type,
               category: categories[Math.floor(Math.random() * categories.length)],
@@ -367,7 +397,7 @@ export default function App() {
 
           newPlans.push({
               id: generateId(),
-              description: `Mock Plan ${i}`,
+              description: `Plan ${desc}`,
               amount: parseFloat((Math.random() * 500).toFixed(2)),
               type: type,
               frequency: freqs[Math.floor(Math.random() * freqs.length)],
@@ -413,8 +443,20 @@ export default function App() {
             return;
         }
         if (window.confirm(`Found ${data.transactions.length} transactions and ${data.plans.length} plans. This will OVERWRITE your current local data. Continue?`)) {
-            setTransactions(data.transactions);
-            setPlans(data.plans);
+            // Migration during import
+            const importedTx = data.transactions.map((t: any) => {
+                 const desc = t.name || t.description || 'Unknown';
+                 const { name, ...rest } = t;
+                 return { ...rest, description: desc };
+            });
+             const importedPlans = data.plans.map((p: any) => {
+                 const desc = p.name || p.description || 'Unknown';
+                 const { name, ...rest } = p;
+                 return { ...rest, description: desc };
+            });
+
+            setTransactions(importedTx);
+            setPlans(importedPlans);
             if (data.cycleStartDay) setCycleStartDay(data.cycleStartDay);
             if (data.deletedIds) setDeletedIds(data.deletedIds);
             setSyncConfig(prev => ({ ...prev, lastSyncedAt: 0 }));
@@ -439,12 +481,14 @@ export default function App() {
 
   const handleSaveData = (data: any) => {
     const now = Date.now();
+    const finalDescription = data.description?.trim() || 'Unknown';
+
     if (editingItem) {
         const isPlan = 'frequency' in editingItem;
         if (isPlan) {
              const updatedPlan = {
                 ...editingItem,
-                description: data.description, amount: data.amount, type: data.type, category: data.category,
+                description: finalDescription, amount: data.amount, type: data.type, category: data.category,
                 startDate: data.date, frequency: data.frequency, maxOccurrences: data.maxOccurrences,
                 lastModified: now
             } as RecurringPlan;
@@ -452,7 +496,7 @@ export default function App() {
         } else {
             const updatedTx = {
                 ...editingItem,
-                description: data.description, amount: data.amount, type: data.type, category: data.category, date: data.date,
+                description: finalDescription, amount: data.amount, type: data.type, category: data.category, date: data.date,
                 lastModified: now
             } as Transaction;
             setTransactions(prev => prev.map(t => t.id === editingItem.id ? updatedTx : t));
@@ -461,13 +505,13 @@ export default function App() {
     } else {
         if (data.kind === 'single') {
             const newTx: Transaction = {
-                id: generateId(), date: data.date, description: data.description, amount: data.amount,
+                id: generateId(), date: data.date, description: finalDescription, amount: data.amount,
                 type: data.type, category: data.category, isPaid: true, lastModified: now
             };
             setTransactions(prev => [newTx, ...prev]);
         } else if (data.kind === 'plan') {
             const newPlan: RecurringPlan = {
-                id: generateId(), description: data.description, amount: data.amount, type: data.type,
+                id: generateId(), description: finalDescription, amount: data.amount, type: data.type,
                 frequency: data.frequency, startDate: data.date, occurrencesGenerated: 0, category: data.category,
                 maxOccurrences: data.maxOccurrences, 
                 lastModified: now
@@ -578,7 +622,7 @@ export default function App() {
                   const newDateStr = targetDate.getFullYear() + '-' + String(targetDate.getMonth() + 1).padStart(2, '0') + '-' + String(targetDate.getDate()).padStart(2, '0');
                   const newPlan: RecurringPlan = {
                       id: generateId(),
-                      description: plan.description, // Same desc
+                      description: plan.description,
                       amount: plan.amount,
                       type: plan.type,
                       frequency: Frequency.ONE_TIME,
@@ -718,6 +762,7 @@ export default function App() {
         onClose={() => { setIsModalOpen(false); setEditingItem(null); }} 
         onSave={handleSaveData} 
         initialData={editingItem}
+        categories={uniqueCategories}
       />
       <SettingsModal 
         isOpen={isSettingsOpen} 

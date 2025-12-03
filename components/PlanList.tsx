@@ -11,6 +11,7 @@ interface Props {
 }
 
 const PAGE_SIZE = 50;
+type SortOption = 'next_date' | 'description_asc' | 'amount_desc' | 'category';
 
 // --- Date Helpers ---
 const parseLocalDate = (dateStr: string): Date => {
@@ -35,29 +36,53 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [renderLimit, setRenderLimit] = useState(PAGE_SIZE);
 
-  // Sorting: Active plans first, then by date, then by lastModified (stability)
-  const sortedPlans = useMemo(() => {
-      return [...plans].sort((a, b) => {
-          const isMaxedA = a.maxOccurrences && a.occurrencesGenerated >= a.maxOccurrences;
-          const isMaxedB = b.maxOccurrences && b.occurrencesGenerated >= b.maxOccurrences;
-          
-          if (isMaxedA && !isMaxedB) return 1;
-          if (!isMaxedA && isMaxedB) return -1;
-          
-          const dateA = addTimeLocal(a.startDate, a.frequency, a.occurrencesGenerated);
-          const dateB = addTimeLocal(b.startDate, b.frequency, b.occurrencesGenerated);
-          
-          const dateDiff = dateA.getTime() - dateB.getTime();
-          if (dateDiff !== 0) return dateDiff;
+  // Filter & Sort State
+  const [filterText, setFilterText] = useState('');
+  const [sortOption, setSortOption] = useState<SortOption>('next_date');
 
-          // Secondary stable sort
-          return (b.lastModified || 0) - (a.lastModified || 0);
-      });
-  }, [plans]);
+  const filteredAndSorted = useMemo(() => {
+    let result = [...plans];
+
+    // Filter
+    if (filterText.trim()) {
+        const lower = filterText.toLowerCase();
+        result = result.filter(p => 
+            p.description.toLowerCase().includes(lower) || 
+            (p.category && p.category.toLowerCase().includes(lower))
+        );
+    }
+
+    // Sort
+    result.sort((a, b) => {
+        // Status Pre-sort (Always keep maxed items at bottom)
+        const isMaxedA = a.maxOccurrences && a.occurrencesGenerated >= a.maxOccurrences;
+        const isMaxedB = b.maxOccurrences && b.occurrencesGenerated >= b.maxOccurrences;
+        if (isMaxedA && !isMaxedB) return 1;
+        if (!isMaxedA && isMaxedB) return -1;
+
+        switch (sortOption) {
+            case 'description_asc':
+                return a.description.localeCompare(b.description);
+            case 'amount_desc':
+                return b.amount - a.amount;
+            case 'category':
+                return a.category.localeCompare(b.category);
+            case 'next_date':
+            default:
+                const dateA = addTimeLocal(a.startDate, a.frequency, a.occurrencesGenerated);
+                const dateB = addTimeLocal(b.startDate, b.frequency, b.occurrencesGenerated);
+                const dateDiff = dateA.getTime() - dateB.getTime();
+                if (dateDiff !== 0) return dateDiff;
+                return (b.lastModified || 0) - (a.lastModified || 0);
+        }
+    });
+
+    return result;
+  }, [plans, filterText, sortOption]);
 
   const visiblePlans = useMemo(() => {
-      return sortedPlans.slice(0, renderLimit);
-  }, [sortedPlans, renderLimit]);
+      return filteredAndSorted.slice(0, renderLimit);
+  }, [filteredAndSorted, renderLimit]);
 
   if (plans.length === 0) return null;
   const today = new Date(); today.setHours(0,0,0,0);
@@ -76,9 +101,29 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
       return `${date.getMonth() + 1}-${date.getDate()}`;
   };
 
-  const formatMoney = (n: number) => n.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
-
   return (
+    <div className="w-full">
+      {/* Filter Bar */}
+      <div className="mb-2 flex gap-2">
+          <input 
+              type="text" 
+              placeholder="Filter Description/Category..." 
+              value={filterText}
+              onChange={e => setFilterText(e.target.value)}
+              className="flex-1 min-w-0 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded px-3 py-1.5 text-xs text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+          />
+          <select 
+              value={sortOption}
+              onChange={e => setSortOption(e.target.value as SortOption)}
+              className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded px-2 py-1.5 text-xs text-gray-800 dark:text-gray-200 focus:outline-none"
+          >
+              <option value="next_date">Next Due</option>
+              <option value="description_asc">Desc A-Z</option>
+              <option value="amount_desc">Amount High</option>
+              <option value="category">Category</option>
+          </select>
+      </div>
+
       <div className="border border-gray-200 dark:border-gray-800 rounded-sm w-full bg-white dark:bg-gray-950 transition-colors">
         <div className="w-full text-left text-xs border-collapse">
             
@@ -126,8 +171,10 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
                                     {/* Status Indicator */}
                                     <div className={`w-1 h-3 rounded-full shrink-0 mt-1 transition-colors ${showMark ? markColor : 'bg-transparent'}`}></div>
                                     
-                                    <div className={`text-gray-700 dark:text-gray-200 font-medium text-xs sm:text-sm transition-all ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}>
-                                        {plan.description}
+                                    <div className="flex-1 min-w-0">
+                                        <div className={`text-gray-700 dark:text-gray-200 font-medium text-xs sm:text-sm transition-all ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}>
+                                            {plan.description}
+                                        </div>
                                     </div>
                                 </div>
 
@@ -197,19 +244,20 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
                 })}
 
                  {/* Load More Button */}
-                 {sortedPlans.length > visiblePlans.length && (
+                 {filteredAndSorted.length > visiblePlans.length && (
                     <div className="p-2 text-center">
                         <button 
                             onClick={handleShowMore}
                             className="text-[10px] uppercase font-bold tracking-widest text-gray-400 dark:text-gray-600 hover:text-indigo-600 dark:hover:text-indigo-400 py-2 px-4 transition-colors"
                         >
-                            Show More Plans ({sortedPlans.length - visiblePlans.length})
+                            Show More Plans ({filteredAndSorted.length - visiblePlans.length})
                         </button>
                     </div>
                 )}
             </div>
         </div>
       </div>
+    </div>
   );
 };
 export default PlanList;

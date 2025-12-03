@@ -8,9 +8,10 @@ interface Props {
   onClose: () => void;
   onSave: (data: any) => void;
   initialData?: Transaction | RecurringPlan | null;
+  categories: string[];
 }
 
-const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initialData }) => {
+const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initialData, categories }) => {
   const [type, setType] = useState<TransactionType>('expense');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -41,7 +42,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
       if (initialData) {
         setType(initialData.type);
         setAmount(initialData.amount.toString());
-        setDescription(initialData.description);
+        setDescription(initialData.description || '');
         setCategory(initialData.category);
         
         if ('frequency' in initialData) {
@@ -158,11 +159,10 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
             <div>
                 <input 
                     type="text" 
-                    required
                     value={description}
                     onChange={e => setDescription(e.target.value)}
-                    className="w-full bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-300 px-3 py-2 rounded text-base focus:border-indigo-500 focus:outline-none transition-colors"
-                    placeholder="Description (e.g. Rent)"
+                    className="w-full bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-300 px-3 py-2 rounded text-base font-bold focus:border-indigo-500 focus:outline-none transition-colors"
+                    placeholder="Description (e.g. Walmart)"
                     autoComplete="off"
                 />
             </div>
@@ -170,7 +170,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
             <div className="grid grid-cols-2 gap-3">
                 <input 
                     type="text" 
-                    list="categories"
+                    list="category-list"
                     value={category}
                     onChange={e => setCategory(e.target.value)}
                     className="bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-400 px-3 py-2 rounded text-sm focus:border-indigo-500 focus:outline-none transition-colors"
@@ -185,11 +185,8 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                 />
             </div>
             
-            <datalist id="categories">
-                <option value="Food" />
-                <option value="Housing" />
-                <option value="Transport" />
-                <option value="Salary" />
+            <datalist id="category-list">
+                {categories.map(c => <option key={c} value={c} />)}
             </datalist>
 
             <div className="pt-2">

@@ -1,3 +1,4 @@
+
 export type TransactionType = 'income' | 'expense';
 
 export enum Frequency {
@@ -15,7 +16,7 @@ export interface Transaction {
   id: string;
   /** ISO Date string YYYY-MM-DD */
   date: string;
-  /** Description of the transaction */
+  /** Detailed description (e.g. "Walmart - Groceries") */
   description: string;
   /** Monetary value */
   amount: number;
