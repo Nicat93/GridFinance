@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { RecurringPlan, Frequency } from '../types';
 
@@ -8,6 +9,8 @@ interface Props {
   onEdit: (plan: RecurringPlan) => void;
   currentPeriodEnd: Date;
 }
+
+const PAGE_SIZE = 50;
 
 // --- Date Helpers ---
 const parseLocalDate = (dateStr: string): Date => {
@@ -30,6 +33,7 @@ const addTimeLocal = (date: string | Date, freq: Frequency, count: number): Date
 const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, currentPeriodEnd }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [renderLimit, setRenderLimit] = useState(PAGE_SIZE);
 
   // Sorting: Active plans first, then by date, then by lastModified (stability)
   const sortedPlans = useMemo(() => {
@@ -51,6 +55,10 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
       });
   }, [plans]);
 
+  const visiblePlans = useMemo(() => {
+      return sortedPlans.slice(0, renderLimit);
+  }, [sortedPlans, renderLimit]);
+
   if (plans.length === 0) return null;
   const today = new Date(); today.setHours(0,0,0,0);
   const periodEnd = new Date(currentPeriodEnd); periodEnd.setHours(23,59,59,999);
@@ -62,6 +70,7 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
   const handleApply = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); onApplyNow(id); };
   const handleEdit = (e: React.MouseEvent, plan: RecurringPlan) => { e.preventDefault(); e.stopPropagation(); onEdit(plan); };
   const toggleRow = (id: string) => { setExpandedId(prev => prev === id ? null : id); setConfirmDeleteId(null); };
+  const handleShowMore = () => setRenderLimit(prev => prev + PAGE_SIZE);
 
   const formatShortDate = (date: Date) => {
       return `${date.getMonth() + 1}-${date.getDate()}`;
@@ -81,7 +90,7 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
 
             {/* --- Body --- */}
             <div className="divide-y divide-gray-100 dark:divide-gray-800 font-mono">
-                {sortedPlans.map(plan => {
+                {visiblePlans.map(plan => {
                     const isExpanded = expandedId === plan.id;
                     const isDeleting = confirmDeleteId === plan.id;
                     const nextDate = addTimeLocal(plan.startDate, plan.frequency, plan.occurrencesGenerated);
@@ -186,6 +195,18 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
                         </div>
                     );
                 })}
+
+                 {/* Load More Button */}
+                 {sortedPlans.length > visiblePlans.length && (
+                    <div className="p-2 text-center">
+                        <button 
+                            onClick={handleShowMore}
+                            className="text-[10px] uppercase font-bold tracking-widest text-gray-400 dark:text-gray-600 hover:text-indigo-600 dark:hover:text-indigo-400 py-2 px-4 transition-colors"
+                        >
+                            Show More Plans ({sortedPlans.length - visiblePlans.length})
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
       </div>

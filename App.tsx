@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus } from './types';
+import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus, TransactionType } from './types';
 import TransactionGrid from './components/TransactionGrid';
 import SummaryBar from './components/SummaryBar';
 import AddTransactionModal from './components/AddTransactionModal';
@@ -341,6 +342,46 @@ export default function App() {
           setCycleStartDay(1);
           setSyncConfig(prev => ({ ...prev, lastSyncedAt: 0 }));
       }
+  };
+
+  const handleAddMockData = () => {
+      const newTxs: Transaction[] = [];
+      const newPlans: RecurringPlan[] = [];
+      const now = Date.now();
+      const categories = ['Food', 'Transport', 'Housing', 'Utilities', 'Entertainment', 'Salary', 'Freelance'];
+      const types: TransactionType[] = ['income', 'expense'];
+      const freqs: Frequency[] = [Frequency.MONTHLY, Frequency.WEEKLY, Frequency.YEARLY, Frequency.ONE_TIME];
+
+      for (let i = 0; i < 200; i++) {
+          const type = Math.random() > 0.7 ? 'income' : 'expense';
+          newTxs.push({
+              id: generateId(),
+              date: new Date(Date.now() - Math.random() * 31536000000).toISOString().split('T')[0], // Last year
+              description: `Mock Transaction ${i}`,
+              amount: parseFloat((Math.random() * 1000).toFixed(2)),
+              type: type,
+              category: categories[Math.floor(Math.random() * categories.length)],
+              isPaid: true,
+              lastModified: now
+          });
+
+          newPlans.push({
+              id: generateId(),
+              description: `Mock Plan ${i}`,
+              amount: parseFloat((Math.random() * 500).toFixed(2)),
+              type: type,
+              frequency: freqs[Math.floor(Math.random() * freqs.length)],
+              startDate: new Date(Date.now() + Math.random() * 31536000000).toISOString().split('T')[0], // Next year
+              occurrencesGenerated: 0,
+              category: categories[Math.floor(Math.random() * categories.length)],
+              maxOccurrences: Math.random() > 0.8 ? 12 : undefined,
+              lastModified: now
+          });
+      }
+
+      setTransactions(prev => [...prev, ...newTxs]);
+      setPlans(prev => [...prev, ...newPlans]);
+      alert("Added 200 mock transactions and 200 mock plans.");
   };
 
   const handleExportData = () => {
@@ -688,6 +729,7 @@ export default function App() {
         onClearData={handleClearData}
         onExportData={handleExportData}
         onImportData={handleImportData}
+        onAddMockData={handleAddMockData}
       />
       <ConfirmModal 
         isOpen={!!shiftCycleDialog} title="Next Billing Cycle?" message={`This payment (${shiftCycleDialog?.newDate.toLocaleDateString()}) falls in the next billing cycle. Shift cycle start to ${shiftCycleDialog?.newDate.getDate()}th?`}

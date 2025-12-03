@@ -12,11 +12,12 @@ interface Props {
   onClearData: () => void;
   onExportData: () => void;
   onImportData: (file: File) => void;
+  onAddMockData: () => void;
 }
 
 const SettingsModal: React.FC<Props> = ({ 
     isOpen, onClose, isDarkMode, onToggleTheme, syncConfig, onSaveSyncConfig, onClearData,
-    onExportData, onImportData
+    onExportData, onImportData, onAddMockData
 }) => {
   const [syncId, setSyncId] = useState(syncConfig.syncId || '');
   const [enabled, setEnabled] = useState(syncConfig.enabled);
@@ -162,8 +163,15 @@ const SettingsModal: React.FC<Props> = ({
                 </button>
             </div>
 
-            {/* Danger Zone */}
-            <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
+            {/* Debug & Danger Zone */}
+            <div className="pt-4 border-t border-gray-200 dark:border-gray-800 space-y-3">
+                <button
+                    onClick={onAddMockData}
+                    className="w-full border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/10 py-2 rounded text-xs font-bold hover:bg-gray-100 dark:hover:bg-gray-900/30 transition-colors"
+                >
+                    Debug: Add Mock Data (200)
+                </button>
+
                 <button 
                     onClick={onClearData}
                     className="w-full border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/10 py-2 rounded text-xs font-bold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
