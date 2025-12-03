@@ -79,13 +79,13 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus }) => 
 
                 {/* Sync Dot */}
                 {syncStatus !== 'offline' && (
-                    <div className="flex items-center gap-1.5 absolute -top-1.5 -right-2 sm:-right-6" title={`Sync Status: ${syncStatus}`}>
+                    <div className="flex items-center gap-1.5 absolute -top-1.5 -right-2 sm:-right-8 bg-white/50 dark:bg-black/50 backdrop-blur rounded px-1" title={`Sync Status: ${syncStatus}`}>
                          <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${
                              syncStatus === 'synced' ? 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]' : 
                              syncStatus === 'syncing' ? 'bg-indigo-500 animate-pulse' : 
                              'bg-rose-500'
                          }`}></div>
-                         {syncStatus === 'synced' && <span className="text-[9px] text-gray-400 dark:text-gray-600 font-bold hidden sm:block">SYNCED</span>}
+                         {syncStatus === 'synced' && <span className="text-[8px] sm:text-[9px] text-gray-400 dark:text-gray-600 font-bold block">SYNCED</span>}
                     </div>
                 )}
                 

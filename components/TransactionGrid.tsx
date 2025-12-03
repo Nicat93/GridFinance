@@ -48,9 +48,9 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
       <div className="w-full text-left text-xs border-collapse">
         
         {/* --- Header --- */}
-        <div className="flex bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400 font-mono uppercase tracking-wider text-[10px]">
-          <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium flex-1">Details</div>
-          <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium text-right w-[100px] sm:w-32">Amount</div>
+        <div className="flex justify-between bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400 font-mono uppercase tracking-wider text-[10px]">
+          <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium">Details</div>
+          <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium text-right">Amount</div>
         </div>
 
         {/* --- Body --- */}
@@ -67,7 +67,7 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
                     
                     {/* Main Row */}
                     <div 
-                        className={`flex items-start cursor-pointer py-2 ${isExpanded ? 'bg-gray-50 dark:bg-gray-900/40' : ''}`} 
+                        className={`flex items-center cursor-pointer py-2 ${isExpanded ? 'bg-gray-50 dark:bg-gray-900/40 items-start' : ''}`} 
                         onClick={() => toggleRow(tx.id)}
                     >
                         {/* Left: Description */}
@@ -77,16 +77,22 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
                             </div>
                         </div>
 
-                        {/* Right: Amount & Metadata */}
-                        <div className="px-2 text-right w-[100px] sm:w-32 shrink-0 flex flex-col items-end gap-0.5">
-                            <div className={`text-[11px] sm:text-sm tracking-tighter font-bold ${tx.type === 'expense' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'} ${isExpanded ? 'break-words' : 'truncate'}`}>
+                        {/* Right: Category, Date, Amount (Single Line) */}
+                        <div className="px-2 shrink-0 flex items-center justify-end gap-1.5 sm:gap-3 text-right">
+                             {/* Category */}
+                             <span className={`text-[10px] text-gray-400 dark:text-gray-500 ${isExpanded ? '' : 'truncate max-w-[50px] sm:max-w-[80px]'}`}>
+                                {tx.category}
+                             </span>
+                             
+                             {/* Date */}
+                             <span className="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                                {formatShortDate(tx.date)}
+                             </span>
+                             
+                             {/* Amount */}
+                             <span className={`text-[11px] sm:text-sm tracking-tighter font-bold whitespace-nowrap ${tx.type === 'expense' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'}`}>
                                 {tx.type === 'expense' ? '-' : '+'}{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                            <div className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1 justify-end truncate w-full">
-                                <span className="truncate max-w-[60px]">{tx.category}</span>
-                                <span className="opacity-50">•</span>
-                                <span>{formatShortDate(tx.date)}</span>
-                            </div>
+                             </span>
                         </div>
                     </div>
 
