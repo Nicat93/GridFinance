@@ -454,12 +454,22 @@ export default function App() {
     const now = Date.now();
     const dateStr = applyDate.getFullYear() + '-' + String(applyDate.getMonth() + 1).padStart(2, '0') + '-' + String(applyDate.getDate()).padStart(2, '0');
     
+    // Don't append count number to description
+    const description = plan.description;
+
     const newTx: Transaction = {
-        id: generateId(), date: dateStr, description: `${plan.description} (${plan.occurrencesGenerated + 1})`,
+        id: generateId(), date: dateStr, description: description,
         amount: plan.amount, type: plan.type, category: plan.category, isPaid: false, relatedPlanId: plan.id, lastModified: now
     };
     setTransactions(prev => [newTx, ...prev]);
-    setPlans(prev => prev.map(p => p.id === planId ? { ...p, occurrencesGenerated: p.occurrencesGenerated + 1, lastModified: now } : p));
+    
+    // If it's a one-time plan, delete it after creating the transaction
+    if (plan.frequency === Frequency.ONE_TIME) {
+        setDeletedIds(prev => ({ ...prev, [planId]: now }));
+        setPlans(prev => prev.filter(p => p.id !== planId));
+    } else {
+        setPlans(prev => prev.map(p => p.id === planId ? { ...p, occurrencesGenerated: p.occurrencesGenerated + 1, lastModified: now } : p));
+    }
   };
 
   const handleApplyPlanNow = (planId: string) => {

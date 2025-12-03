@@ -20,33 +20,28 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
         if (timeA !== timeB) return timeB - timeA;
 
         // 2. Secondary: Last Modified Descending (Recently added/edited first)
-        // This ensures consistent order for same-day transactions after sync
         const modA = a.lastModified || 0;
         const modB = b.lastModified || 0;
         if (modA !== modB) return modB - modA;
 
-        // 3. Fallback: ID (Absolute determinism)
+        // 3. Fallback: ID
         return a.id.localeCompare(b.id);
     });
   }, [transactions]);
 
+  // --- Helpers ---
+  const formatShortDate = (dateStr: string) => {
+      const parts = dateStr.split('-');
+      // Returns MM-DD, e.g. "11-25"
+      return `${parts[1]}-${parts[2]}`;
+  };
+
   // --- Handlers ---
-  
-  const handleDeleteClick = (e: React.MouseEvent, id: string) => {
-    e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(id);
-  };
-  const handleConfirmDelete = (e: React.MouseEvent, id: string) => {
-    e.preventDefault(); e.stopPropagation(); onDelete(id); setConfirmDeleteId(null);
-  };
-  const handleCancelDelete = (e: React.MouseEvent) => {
-    e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(null);
-  };
-  const handleEdit = (e: React.MouseEvent, tx: Transaction) => {
-      e.preventDefault(); e.stopPropagation(); onEdit(tx);
-  };
-  const toggleRow = (id: string) => {
-      setExpandedId(prev => prev === id ? null : id); setConfirmDeleteId(null);
-  };
+  const handleDeleteClick = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(id); };
+  const handleConfirmDelete = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); onDelete(id); setConfirmDeleteId(null); };
+  const handleCancelDelete = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(null); };
+  const handleEdit = (e: React.MouseEvent, tx: Transaction) => { e.preventDefault(); e.stopPropagation(); onEdit(tx); };
+  const toggleRow = (id: string) => { setExpandedId(prev => prev === id ? null : id); setConfirmDeleteId(null); };
 
   return (
     <div className="border border-gray-200 dark:border-gray-800 rounded-sm w-full bg-white dark:bg-gray-950 transition-colors">
@@ -54,8 +49,8 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
         
         {/* --- Header --- */}
         <div className="flex bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400 font-mono uppercase tracking-wider text-[10px]">
-          <div className="py-1 px-1.5 border-b border-gray-200 dark:border-gray-800 font-medium flex-1">Desc</div>
-          <div className="py-1 px-1.5 border-b border-gray-200 dark:border-gray-800 font-medium text-right w-[75px] sm:w-28">Amt</div>
+          <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium flex-1">Details</div>
+          <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium text-right w-[100px] sm:w-32">Amount</div>
         </div>
 
         {/* --- Body --- */}
@@ -71,27 +66,36 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
                 <div key={tx.id} className="group flex flex-col hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
                     
                     {/* Main Row */}
-                    <div className="flex items-center cursor-pointer py-1" onClick={() => toggleRow(tx.id)}>
-                        <div className="px-1.5 flex-1 min-w-0">
-                            <div className="text-gray-700 dark:text-gray-300 font-medium truncate text-xs sm:text-sm">{tx.description}</div>
+                    <div 
+                        className={`flex items-start cursor-pointer py-2 ${isExpanded ? 'bg-gray-50 dark:bg-gray-900/40' : ''}`} 
+                        onClick={() => toggleRow(tx.id)}
+                    >
+                        {/* Left: Description */}
+                        <div className="px-2 flex-1 min-w-0">
+                            <div className={`text-gray-700 dark:text-gray-200 font-medium text-xs sm:text-sm transition-all ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}>
+                                {tx.description}
+                            </div>
                         </div>
-                        <div className={`px-1.5 text-right w-[75px] sm:w-28 truncate text-[11px] sm:text-sm tracking-tighter ${tx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                            {tx.type === 'expense' ? '-' : '+'}
-                            {tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+
+                        {/* Right: Amount & Metadata */}
+                        <div className="px-2 text-right w-[100px] sm:w-32 shrink-0 flex flex-col items-end gap-0.5">
+                            <div className={`text-[11px] sm:text-sm tracking-tighter font-bold ${tx.type === 'expense' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'} ${isExpanded ? 'break-words' : 'truncate'}`}>
+                                {tx.type === 'expense' ? '-' : '+'}{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                            <div className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1 justify-end truncate w-full">
+                                <span className="truncate max-w-[60px]">{tx.category}</span>
+                                <span className="opacity-50">•</span>
+                                <span>{formatShortDate(tx.date)}</span>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Expanded Details Panel */}
+                    {/* Expanded Details Panel (Actions Only) */}
                     {isExpanded && (
                         <div 
-                            className="bg-gray-50 dark:bg-gray-900/50 px-2 py-2 text-[11px] text-gray-500 border-t border-gray-100 dark:border-gray-800/50 flex flex-col gap-2 cursor-default"
+                            className="bg-gray-50 dark:bg-gray-900/50 px-2 pb-2 text-[11px] text-gray-500 flex flex-col gap-2 cursor-default"
                             onClick={(e) => e.stopPropagation()}
                         >
-                             <div className="flex justify-between items-center">
-                                <span>{tx.date} • <span className="uppercase tracking-wide border border-gray-300 dark:border-gray-700 rounded px-1 text-[9px]">{tx.category}</span></span>
-                             </div>
-                             <div className="text-gray-600 dark:text-gray-400 italic break-words">{tx.description}</div>
-                             
                              {/* Action Buttons */}
                              <div className="flex gap-2 pt-1 border-t border-gray-200 dark:border-gray-800/50 mt-1 relative z-10">
                                 {isDeleting ? (
