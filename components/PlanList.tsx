@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { RecurringPlan, Frequency } from '../types';
 
@@ -7,6 +6,7 @@ interface Props {
   onDelete: (id: string) => void;
   onApplyNow: (planId: string) => void;
   onEdit: (plan: RecurringPlan) => void;
+  currentPeriodEnd: Date;
 }
 
 // --- Date Helpers ---
@@ -27,7 +27,7 @@ const addTimeLocal = (date: string | Date, freq: Frequency, count: number): Date
 };
 
 // --- Component ---
-const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
+const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, currentPeriodEnd }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -53,6 +53,7 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
 
   if (plans.length === 0) return null;
   const today = new Date(); today.setHours(0,0,0,0);
+  const periodEnd = new Date(currentPeriodEnd); periodEnd.setHours(23,59,59,999);
 
   // --- Handlers ---
   const handleDeleteClick = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(id); };
@@ -65,6 +66,8 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
   const formatShortDate = (date: Date) => {
       return `${date.getMonth() + 1}-${date.getDate()}`;
   };
+
+  const formatMoney = (n: number) => n.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
   return (
       <div className="border border-gray-200 dark:border-gray-800 rounded-sm w-full bg-white dark:bg-gray-950 transition-colors">
@@ -83,9 +86,23 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
                     const isDeleting = confirmDeleteId === plan.id;
                     const nextDate = addTimeLocal(plan.startDate, plan.frequency, plan.occurrencesGenerated);
                     nextDate.setHours(0,0,0,0);
-                    const isFuture = nextDate > today;
+                    const isFuture = nextDate >= today;
                     const isMaxed = plan.maxOccurrences ? plan.occurrencesGenerated >= plan.maxOccurrences : false;
                     const canApply = !isMaxed;
+                    
+                    // Status Logic
+                    const isLate = nextDate < today;
+                    const isUpcomingInPeriod = nextDate >= today && nextDate <= periodEnd;
+                    // If it's maxed or in next cycle, we don't show a mark
+                    const showMark = !isMaxed && (isLate || isUpcomingInPeriod);
+
+                    let markColor = 'bg-transparent';
+                    if (isLate) markColor = 'bg-rose-500'; // Late (Red)
+                    else if (isUpcomingInPeriod) markColor = 'bg-orange-500'; // Upcoming in this period (Orange)
+
+                    const progressPercent = plan.maxOccurrences 
+                        ? Math.min((plan.occurrencesGenerated / plan.maxOccurrences) * 100, 100) 
+                        : 0;
 
                     return (
                         <div key={plan.id} className="group flex flex-col hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
@@ -97,10 +114,11 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
                             >
                                 {/* Left: Indicator & Description */}
                                 <div className="px-2 flex-1 min-w-0 flex items-center gap-2 self-start">
-                                    <div className={`w-1 h-3 rounded-full shrink-0 mt-1 ${plan.type === 'income' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                                    {/* Status Indicator */}
+                                    <div className={`w-1 h-3 rounded-full shrink-0 mt-1 transition-colors ${showMark ? markColor : 'bg-transparent'}`}></div>
+                                    
                                     <div className={`text-gray-700 dark:text-gray-200 font-medium text-xs sm:text-sm transition-all ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}>
                                         {plan.description}
-                                        {plan.isInstallment && <span className="ml-1 text-[9px] text-blue-500 bg-blue-50 dark:bg-blue-900/30 px-1 py-0.5 rounded border border-blue-100 dark:border-blue-900 align-middle">LOAN</span>}
                                     </div>
                                 </div>
 
@@ -113,7 +131,9 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
 
                                     {/* Date Pill */}
                                     <span className={`text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded border whitespace-nowrap ${
-                                        !isFuture && !isMaxed
+                                        isLate && !isMaxed
+                                        ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-900/40 text-rose-600 dark:text-rose-500 font-bold'
+                                        : (!isFuture && !isMaxed) 
                                         ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-900/40 text-amber-600 dark:text-amber-500 font-bold' 
                                         : 'bg-gray-100 dark:bg-gray-800/60 border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400'
                                     }`}>
@@ -136,9 +156,11 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
                                     {/* Additional Info (Progress) */}
                                     {plan.maxOccurrences && plan.frequency !== Frequency.ONE_TIME && (
                                         <div className="flex items-center gap-2 text-[9px] sm:text-[10px]">
-                                            <span>Progress: {plan.occurrencesGenerated} / {plan.maxOccurrences}</span>
+                                            <span className="font-mono">
+                                                Progress: {plan.occurrencesGenerated} / {plan.maxOccurrences}
+                                            </span>
                                             <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-800 rounded overflow-hidden max-w-[100px]">
-                                                <div className="h-full bg-indigo-600" style={{ width: `${Math.min((plan.occurrencesGenerated / plan.maxOccurrences) * 100, 100)}%` }}></div>
+                                                <div className="h-full bg-indigo-600" style={{ width: `${progressPercent}%` }}></div>
                                             </div>
                                         </div>
                                     )}

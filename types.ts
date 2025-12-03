@@ -49,9 +49,6 @@ export interface RecurringPlan {
   /** Counter of how many real Transactions have been created from this plan */
   occurrencesGenerated: number;
   category: string;
-  /** Visual tag to treat this as a loan/installment plan */
-  isInstallment: boolean;
-  totalInstallmentAmount?: number;
   /** Timestamp for sync conflict resolution */
   lastModified?: number;
 }

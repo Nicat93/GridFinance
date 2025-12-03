@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus } from './types';
 import TransactionGrid from './components/TransactionGrid';
@@ -7,6 +6,7 @@ import AddTransactionModal from './components/AddTransactionModal';
 import PlanList from './components/PlanList';
 import ConfirmModal from './components/ConfirmModal';
 import SettingsModal from './components/SettingsModal';
+import PeriodTransitionModal from './components/PeriodTransitionModal';
 import * as SupabaseService from './services/supabaseService';
 import { APP_VERSION } from './version';
 
@@ -100,6 +100,13 @@ export default function App() {
   
   // Dialog state for "Apply Now" edge case where date falls in next cycle
   const [shiftCycleDialog, setShiftCycleDialog] = useState<{ isOpen: boolean, planId: string, newDate: Date } | null>(null);
+
+  // Transition Dialog State
+  const [transitionState, setTransitionState] = useState<{ 
+    isOpen: boolean, 
+    targetDate: Date, 
+    pendingItems: { plan: RecurringPlan, due: Date }[] 
+  } | null>(null);
   
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('offline');
   const syncTimeoutRef = useRef<number | null>(null);
@@ -267,31 +274,26 @@ export default function App() {
 
   // --- Logic: Financial Snapshot Calculation ---
 
-  const snapshot: FinancialSnapshot = useMemo(() => {
-    // 1. Calculate Current Balance (Actuals)
-    const currentBalance = transactions.reduce((acc, t) => t.type === 'income' ? acc + t.amount : acc - t.amount, 0);
-    
-    // 2. Determine Period Window based on 'cycleStartDay'
-    const today = new Date(); today.setHours(0,0,0,0);
-    const anchor = new Date(viewDate); anchor.setHours(0,0,0,0);
-    
-    let periodStart = new Date(anchor.getFullYear(), anchor.getMonth(), cycleStartDay);
-    // If anchor is before the cycle start day, we are in the previous month's cycle
-    if (anchor.getDate() < cycleStartDay) {
-        periodStart = new Date(anchor.getFullYear(), anchor.getMonth() - 1, cycleStartDay);
-        // Handle irregular month lengths
-        if (periodStart.getDate() !== cycleStartDay) periodStart = new Date(anchor.getFullYear(), anchor.getMonth() - 1 + 1, 0);
+  const calculatePeriod = (anchor: Date, startDay: number) => {
+    const d = new Date(anchor); d.setHours(0,0,0,0);
+    let start = new Date(d.getFullYear(), d.getMonth(), startDay);
+    if (d.getDate() < startDay) {
+        start = new Date(d.getFullYear(), d.getMonth() - 1, startDay);
+        if (start.getDate() !== startDay) start = new Date(d.getFullYear(), d.getMonth() - 1 + 1, 0);
     } else {
-         // Handle irregular month lengths
-         if (periodStart.getDate() !== cycleStartDay) periodStart = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
+        if (start.getDate() !== startDay) start = new Date(d.getFullYear(), d.getMonth() + 1, 0);
     }
-    
-    const periodEnd = new Date(periodStart); 
-    periodEnd.setMonth(periodEnd.getMonth() + 1); 
-    periodEnd.setDate(periodEnd.getDate() - 1); 
-    periodEnd.setHours(23, 59, 59, 999);
+    const end = new Date(start); 
+    end.setMonth(end.getMonth() + 1); 
+    end.setDate(end.getDate() - 1); 
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  };
 
-    // 3. Project Future Balance
+  const snapshot: FinancialSnapshot = useMemo(() => {
+    const currentBalance = transactions.reduce((acc, t) => t.type === 'income' ? acc + t.amount : acc - t.amount, 0);
+    const { start: periodStart, end: periodEnd } = calculatePeriod(viewDate, cycleStartDay);
+
     let projectedBalance = currentBalance; 
     let upcomingIncome = 0; 
     let upcomingExpenses = 0;
@@ -301,18 +303,15 @@ export default function App() {
         let simCount = plan.occurrencesGenerated;
         let safety = 0;
 
-        // Simulate plan occurrences up to the end of the current period
         while (safety < 100) {
             safety++;
             const currentDate = new Date(simDate); currentDate.setHours(0,0,0,0);
             
-            // Stop conditions
             if (currentDate > periodEnd) break;
             if (plan.maxOccurrences && simCount >= plan.maxOccurrences) break;
             if (plan.endDate && currentDate > new Date(plan.endDate)) break;
             
-            // Only add to projection if it's within the current period
-            // (Even if slightly in the past, e.g. day 1 of month when today is day 3)
+            // Only add if inside period window (or unapplied past items in this cycle)
             if (currentDate >= periodStart) {
                 if (plan.type === 'income') { 
                     upcomingIncome += plan.amount; 
@@ -323,7 +322,6 @@ export default function App() {
                 }
             }
             
-            // Iterate
             simCount++; 
             simDate = addTime(plan.startDate, plan.frequency, simCount);
             if (plan.frequency === Frequency.ONE_TIME) break;
@@ -341,7 +339,6 @@ export default function App() {
           setPlans([]);
           setDeletedIds({});
           setCycleStartDay(1);
-          // Force full resync by resetting timestamp
           setSyncConfig(prev => ({ ...prev, lastSyncedAt: 0 }));
       }
   };
@@ -370,22 +367,16 @@ export default function App() {
     try {
         const text = await file.text();
         const data = JSON.parse(text);
-        
-        // Basic validation
         if (!Array.isArray(data.transactions) || !Array.isArray(data.plans)) {
             alert("Invalid backup file format.");
             return;
         }
-
         if (window.confirm(`Found ${data.transactions.length} transactions and ${data.plans.length} plans. This will OVERWRITE your current local data. Continue?`)) {
             setTransactions(data.transactions);
             setPlans(data.plans);
             if (data.cycleStartDay) setCycleStartDay(data.cycleStartDay);
             if (data.deletedIds) setDeletedIds(data.deletedIds);
-            
-            // Force push of imported data on next sync by resetting sync time
             setSyncConfig(prev => ({ ...prev, lastSyncedAt: 0 }));
-            
             setIsSettingsOpen(false);
             alert("Import successful.");
         }
@@ -396,7 +387,6 @@ export default function App() {
   };
 
   const handleSaveSyncConfig = (newConfig: SyncConfig) => {
-    // If key changed, clear local data to prevent data leakage/mixing
     if (newConfig.syncId !== syncConfig.syncId) {
         setTransactions([]);
         setPlans([]);
@@ -414,7 +404,7 @@ export default function App() {
              const updatedPlan = {
                 ...editingItem,
                 description: data.description, amount: data.amount, type: data.type, category: data.category,
-                startDate: data.date, frequency: data.frequency, maxOccurrences: data.maxOccurrences, isInstallment: data.isInstallment,
+                startDate: data.date, frequency: data.frequency, maxOccurrences: data.maxOccurrences,
                 lastModified: now
             } as RecurringPlan;
             setPlans(prev => prev.map(p => p.id === editingItem.id ? updatedPlan : p));
@@ -438,32 +428,26 @@ export default function App() {
             const newPlan: RecurringPlan = {
                 id: generateId(), description: data.description, amount: data.amount, type: data.type,
                 frequency: data.frequency, startDate: data.date, occurrencesGenerated: 0, category: data.category,
-                isInstallment: data.isInstallment, maxOccurrences: data.maxOccurrences, lastModified: now
+                maxOccurrences: data.maxOccurrences, 
+                lastModified: now
             };
             setPlans(prev => [...prev, newPlan]);
         }
     }
   };
 
-  /**
-   * Converts a plan occurrence into a real transaction.
-   */
   const executePlanApplication = (planId: string, applyDate: Date) => {
     const plan = plans.find(p => p.id === planId);
     if (!plan) return;
     const now = Date.now();
     const dateStr = applyDate.getFullYear() + '-' + String(applyDate.getMonth() + 1).padStart(2, '0') + '-' + String(applyDate.getDate()).padStart(2, '0');
     
-    // Don't append count number to description
-    const description = plan.description;
-
     const newTx: Transaction = {
-        id: generateId(), date: dateStr, description: description,
+        id: generateId(), date: dateStr, description: plan.description,
         amount: plan.amount, type: plan.type, category: plan.category, isPaid: false, relatedPlanId: plan.id, lastModified: now
     };
     setTransactions(prev => [newTx, ...prev]);
     
-    // If it's a one-time plan, delete it after creating the transaction
     if (plan.frequency === Frequency.ONE_TIME) {
         setDeletedIds(prev => ({ ...prev, [planId]: now }));
         setPlans(prev => prev.filter(p => p.id !== planId));
@@ -472,20 +456,129 @@ export default function App() {
     }
   };
 
+  // --- Handlers: Date & Period Management ---
+
+  const handleUpdateBillingDate = (newDate: Date) => { 
+    // Check for period transition
+    const currentPeriod = snapshot;
+    const { start: newPeriodStart } = calculatePeriod(newDate, newDate.getDate()); // Assuming new date sets the start day
+    
+    // If moving to a future period (start date of new view is > start date of current view)
+    if (newPeriodStart > currentPeriod.periodStart) {
+        const pending: { plan: RecurringPlan, due: Date }[] = [];
+        const today = new Date(); today.setHours(0,0,0,0);
+
+        plans.forEach(plan => {
+             // Calculate Next Due Date
+             const nextDate = addTime(plan.startDate, plan.frequency, plan.occurrencesGenerated);
+             nextDate.setHours(0,0,0,0);
+             const isMaxed = plan.maxOccurrences ? plan.occurrencesGenerated >= plan.maxOccurrences : false;
+
+             // If item is Due within the CURRENT (old) period window
+             if (!isMaxed && nextDate >= currentPeriod.periodStart && nextDate <= currentPeriod.periodEnd) {
+                 pending.push({ plan, due: nextDate });
+             }
+             // Also include any "Late" items that are even older than current period start
+             else if (!isMaxed && nextDate < currentPeriod.periodStart) {
+                 pending.push({ plan, due: nextDate });
+             }
+        });
+
+        if (pending.length > 0) {
+            setTransitionState({
+                isOpen: true,
+                targetDate: newDate,
+                pendingItems: pending
+            });
+            // We do NOT update the viewDate yet. We wait for modal resolution.
+            return;
+        }
+    }
+
+    // Default behavior if no transition logic triggered
+    setCycleStartDay(newDate.getDate()); 
+    setViewDate(newDate); 
+  };
+
+  const handleResolveTransitionItem = (planId: string, action: 'move' | 'paid' | 'cancel') => {
+      if (!transitionState) return;
+      const { targetDate } = transitionState;
+      const item = transitionState.pendingItems.find(i => i.plan.id === planId);
+      if (!item) return;
+
+      const now = Date.now();
+
+      if (action === 'paid') {
+          // Create Transaction at original due date
+          executePlanApplication(planId, item.due);
+      } else if (action === 'cancel') {
+          // Skip occurrence
+          const plan = plans.find(p => p.id === planId);
+          if (plan) {
+             if (plan.frequency === Frequency.ONE_TIME) {
+                 deletePlan(planId);
+             } else {
+                 setPlans(prev => prev.map(p => p.id === planId ? { ...p, occurrencesGenerated: p.occurrencesGenerated + 1, lastModified: now } : p));
+             }
+          }
+      } else if (action === 'move') {
+          // Move to new target date
+          const plan = plans.find(p => p.id === planId);
+          if (plan) {
+              if (plan.frequency === Frequency.ONE_TIME) {
+                  // Simply update date
+                  const newDateStr = targetDate.getFullYear() + '-' + String(targetDate.getMonth() + 1).padStart(2, '0') + '-' + String(targetDate.getDate()).padStart(2, '0');
+                  setPlans(prev => prev.map(p => p.id === planId ? { ...p, startDate: newDateStr, lastModified: now } : p));
+              } else {
+                  // Recurring: Skip current, create new One-Time plan at target date
+                  // 1. Skip
+                  setPlans(prev => prev.map(p => p.id === planId ? { ...p, occurrencesGenerated: p.occurrencesGenerated + 1, lastModified: now } : p));
+                  // 2. Create new One Time
+                  const newDateStr = targetDate.getFullYear() + '-' + String(targetDate.getMonth() + 1).padStart(2, '0') + '-' + String(targetDate.getDate()).padStart(2, '0');
+                  const newPlan: RecurringPlan = {
+                      id: generateId(),
+                      description: plan.description, // Same desc
+                      amount: plan.amount,
+                      type: plan.type,
+                      frequency: Frequency.ONE_TIME,
+                      startDate: newDateStr,
+                      occurrencesGenerated: 0,
+                      category: plan.category,
+                      lastModified: now
+                  };
+                  setPlans(prev => [...prev, newPlan]);
+              }
+          }
+      }
+
+      // Remove from pending list
+      setTransitionState(prev => {
+          if (!prev) return null;
+          return {
+              ...prev,
+              pendingItems: prev.pendingItems.filter(i => i.plan.id !== planId)
+          };
+      });
+  };
+
+  const handleFinishTransition = () => {
+      if (transitionState) {
+          setCycleStartDay(transitionState.targetDate.getDate());
+          setViewDate(transitionState.targetDate);
+          setTransitionState(null);
+      }
+  };
+
   const handleApplyPlanNow = (planId: string) => {
     const plan = plans.find(p => p.id === planId);
     if (!plan) return;
     if (plan.maxOccurrences && plan.occurrencesGenerated >= plan.maxOccurrences) { alert("Max payments reached."); return; }
     
     const newDate = addTime(plan.startDate, plan.frequency, plan.occurrencesGenerated); newDate.setHours(0,0,0,0);
-    
-    // Check if the new transaction would fall into a future billing cycle
     const currentPeriodEnd = new Date(snapshot.periodEnd); currentPeriodEnd.setHours(23, 59, 59, 999);
     const nextPeriodEnd = new Date(currentPeriodEnd); nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 1);
     
     if (newDate > nextPeriodEnd) { alert(`Too far: ${newDate.toLocaleDateString()}`); return; }
-    
-    // If it falls in next cycle, ask user if they want to shift the view to that cycle
     if (newDate > currentPeriodEnd) { setShiftCycleDialog({ isOpen: true, planId, newDate }); } 
     else { executePlanApplication(planId, newDate); }
   };
@@ -493,7 +586,6 @@ export default function App() {
   const deleteTransaction = (id: string) => {
     const now = Date.now();
     const txToDelete = transactions.find(t => t.id === id);
-    // If it was generated from a plan, optionally rollback the plan's counter (simple implementation: decrement)
     if (txToDelete && txToDelete.relatedPlanId) {
         setPlans(prev => prev.map(p => {
             if (p.id === txToDelete.relatedPlanId) return { ...p, occurrencesGenerated: Math.max(0, p.occurrencesGenerated - 1), lastModified: now };
@@ -509,7 +601,6 @@ export default function App() {
       setPlans(prev => prev.filter(p => p.id !== id)); 
   };
 
-  const handleUpdateBillingDate = (date: Date) => { setCycleStartDay(date.getDate()); setViewDate(date); };
   const handleConfirmShiftCycle = () => { if (shiftCycleDialog) { setCycleStartDay(shiftCycleDialog.newDate.getDate()); setViewDate(shiftCycleDialog.newDate); executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate); setShiftCycleDialog(null); } };
   const handleAlternativeKeepCycle = () => { if (shiftCycleDialog) { executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate); setShiftCycleDialog(null); } };
 
@@ -525,7 +616,7 @@ export default function App() {
                     <svg className="w-2.5 h-2.5 text-gray-500 dark:text-gray-600 transition-transform duration-200" style={{ transform: showPlanned ? 'rotate(90deg)' : 'rotate(0deg)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
                     <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest group-hover:text-gray-800 dark:group-hover:text-gray-300 transition-colors">Planned</h3>
                 </div>
-                {showPlanned && <PlanList plans={plans} onDelete={deletePlan} onEdit={(p) => { setEditingItem(p); setIsModalOpen(true); }} onApplyNow={handleApplyPlanNow} />}
+                {showPlanned && <PlanList plans={plans} onDelete={deletePlan} onEdit={(p) => { setEditingItem(p); setIsModalOpen(true); }} onApplyNow={handleApplyPlanNow} currentPeriodEnd={snapshot.periodEnd} />}
             </div>
         )}
 
@@ -602,6 +693,18 @@ export default function App() {
         isOpen={!!shiftCycleDialog} title="Next Billing Cycle?" message={`This payment (${shiftCycleDialog?.newDate.toLocaleDateString()}) falls in the next billing cycle. Shift cycle start to ${shiftCycleDialog?.newDate.getDate()}th?`}
         onConfirm={handleConfirmShiftCycle} confirmText="Yes, Shift Cycle" onAlternative={handleAlternativeKeepCycle} alternativeText="No, Keep Current" onCancel={() => setShiftCycleDialog(null)} cancelText="Cancel"
       />
+      
+      {/* Period Transition Modal */}
+      {transitionState && (
+          <PeriodTransitionModal
+            isOpen={transitionState.isOpen}
+            targetDate={transitionState.targetDate}
+            pendingPlans={transitionState.pendingItems}
+            onResolve={handleResolveTransitionItem}
+            onContinue={handleFinishTransition}
+            onCancel={() => setTransitionState(null)}
+          />
+      )}
     </div>
   );
 }
