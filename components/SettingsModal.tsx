@@ -23,10 +23,16 @@ const SettingsModal: React.FC<Props> = ({
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-      if (isOpen) {
-          setSyncId(syncConfig.syncId || '');
-          setEnabled(syncConfig.enabled);
-      }
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      setSyncId(syncConfig.syncId || '');
+      setEnabled(syncConfig.enabled);
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [isOpen, syncConfig]);
 
   const handleSaveSync = () => {

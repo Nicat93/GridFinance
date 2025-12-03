@@ -24,6 +24,18 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   // Calculator State
   const [calcTarget, setCalcTarget] = useState<'amount' | 'maxOccurrences' | null>(null);
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   useEffect(() => {
     if (isOpen) {
       if (initialData) {
@@ -103,7 +115,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
 
   return (
     <>
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-10 sm:pt-20 bg-black/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-10 sm:pt-20 bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
         <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 w-full max-w-sm rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-4 border-b border-gray-100 dark:border-gray-900 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
                 <h2 className="text-gray-800 dark:text-gray-200 font-bold text-base uppercase tracking-wide">
