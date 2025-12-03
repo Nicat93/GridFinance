@@ -558,6 +558,20 @@ export default function App() {
           </svg>
       </button>
 
+      {/* Sync Status - Bottom Left (Below settings button) */}
+      {syncStatus !== 'offline' && (
+        <div className="fixed bottom-2 left-6 z-50 flex items-center gap-1.5">
+             <div className={`w-1.5 h-1.5 rounded-full ${
+                 syncStatus === 'synced' ? 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]' : 
+                 syncStatus === 'syncing' ? 'bg-indigo-500 animate-pulse' : 
+                 'bg-rose-500'
+             }`}></div>
+             <span className="text-[9px] text-gray-400 dark:text-gray-600 font-bold tracking-wider">
+                {syncStatus === 'synced' ? 'SYNCED' : syncStatus === 'syncing' ? 'SYNCING...' : 'ERROR'}
+             </span>
+        </div>
+      )}
+
       <button 
           onClick={() => setIsModalOpen(true)}
           className="fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-2xl flex items-center justify-center text-3xl font-light transition-transform hover:scale-105 active:scale-95 z-40 border border-indigo-400/30"

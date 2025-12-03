@@ -71,9 +71,9 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
         <div className="w-full text-left text-xs border-collapse">
             
             {/* --- Header --- */}
-            <div className="flex bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400 font-mono uppercase tracking-wider text-[10px]">
-                <div className="py-1 px-1.5 border-b border-gray-200 dark:border-gray-800 font-medium flex-1">Details</div>
-                <div className="py-1 px-1.5 border-b border-gray-200 dark:border-gray-800 font-medium text-right w-[100px] sm:w-32">Amount</div>
+            <div className="flex justify-between bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400 font-mono uppercase tracking-wider text-[10px]">
+                <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium">Details</div>
+                <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium text-right">Amount</div>
             </div>
 
             {/* --- Body --- */}
@@ -92,28 +92,38 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
                             
                             {/* Main Row */}
                             <div 
-                                className={`flex items-start cursor-pointer py-1.5 ${isExpanded ? 'bg-gray-50 dark:bg-gray-900/40' : ''}`} 
+                                className={`flex items-center cursor-pointer py-2 ${isExpanded ? 'bg-gray-50 dark:bg-gray-900/40 items-start' : ''}`} 
                                 onClick={() => toggleRow(plan.id)}
                             >
                                 {/* Left: Indicator & Description */}
-                                <div className="px-1.5 flex-1 min-w-0 flex items-start gap-2">
-                                    <div className={`w-1 h-3.5 mt-0.5 rounded-sm shrink-0 ${plan.type === 'income' ? 'bg-emerald-600 dark:bg-emerald-800' : 'bg-rose-600 dark:bg-rose-800'}`}></div>
-                                    <div className={`text-gray-700 dark:text-gray-300 font-medium text-xs sm:text-sm ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}>
+                                <div className="px-2 flex-1 min-w-0 flex items-center gap-2 self-start">
+                                    <div className={`w-1 h-3 rounded-full shrink-0 mt-1 ${plan.type === 'income' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                                    <div className={`text-gray-700 dark:text-gray-200 font-medium text-xs sm:text-sm transition-all ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}>
                                         {plan.description}
-                                        {plan.isInstallment && <span className="ml-1 text-[9px] text-blue-600 dark:text-blue-500 bg-blue-100 dark:bg-blue-900/20 px-1 rounded align-middle">LOAN</span>}
+                                        {plan.isInstallment && <span className="ml-1 text-[9px] text-blue-500 bg-blue-50 dark:bg-blue-900/30 px-1 py-0.5 rounded border border-blue-100 dark:border-blue-900 align-middle">LOAN</span>}
                                     </div>
                                 </div>
 
-                                {/* Right: Amount & Metadata */}
-                                <div className="px-1.5 text-right w-[100px] sm:w-32 shrink-0 flex flex-col items-end gap-0.5">
-                                    <div className={`text-[11px] sm:text-sm tracking-tighter ${plan.type === 'income' ? 'text-emerald-600 dark:text-emerald-400/80' : 'text-rose-600 dark:text-rose-400/80'}`}>
+                                {/* Right: Category, Date, Amount (Single Line) */}
+                                <div className="px-2 shrink-0 flex items-center justify-end gap-1.5 sm:gap-2 text-right">
+                                    {/* Category Pill */}
+                                    <span className={`text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 ${isExpanded ? '' : 'truncate max-w-[60px]'}`}>
+                                        {plan.category}
+                                    </span>
+
+                                    {/* Date Pill */}
+                                    <span className={`text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                                        !isFuture && !isMaxed
+                                        ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-900/40 text-amber-600 dark:text-amber-500 font-bold' 
+                                        : 'bg-gray-100 dark:bg-gray-800/60 border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400'
+                                    }`}>
+                                        {isMaxed ? 'Done' : formatShortDate(nextDate)}
+                                    </span>
+                                    
+                                    {/* Amount */}
+                                    <span className={`text-[11px] sm:text-sm tracking-tighter font-bold whitespace-nowrap min-w-[50px] ${plan.type === 'income' ? 'text-emerald-500 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                                         {plan.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </div>
-                                    <div className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1 justify-end truncate w-full">
-                                        <span className="truncate max-w-[60px]">{plan.category}</span>
-                                        <span className="opacity-50">•</span>
-                                        <span className={isFuture ? '' : 'text-indigo-500 dark:text-indigo-400 font-bold'}>{formatShortDate(nextDate)}</span>
-                                    </div>
+                                    </span>
                                 </div>
                             </div>
 
@@ -123,12 +133,11 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
                                     className="bg-gray-50 dark:bg-gray-900/50 px-2 pb-2 text-[11px] text-gray-500 flex flex-col gap-2 cursor-default" 
                                     onClick={(e) => e.stopPropagation()}
                                 >
-                                    
                                     {/* Additional Info (Progress) */}
                                     {plan.maxOccurrences && plan.frequency !== Frequency.ONE_TIME && (
-                                        <div className="flex items-center gap-2 text-[9px] sm:text-[10px] mt-1">
+                                        <div className="flex items-center gap-2 text-[9px] sm:text-[10px]">
                                             <span>Progress: {plan.occurrencesGenerated} / {plan.maxOccurrences}</span>
-                                            <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-800 rounded overflow-hidden">
+                                            <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-800 rounded overflow-hidden max-w-[100px]">
                                                 <div className="h-full bg-indigo-600" style={{ width: `${Math.min((plan.occurrencesGenerated / plan.maxOccurrences) * 100, 100)}%` }}></div>
                                             </div>
                                         </div>
@@ -138,15 +147,15 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit }) => {
                                     <div className="flex gap-2 pt-1 border-t border-gray-200 dark:border-gray-800/50 mt-1 relative z-10">
                                         {isDeleting ? (
                                             <>
-                                                <div className="flex-1 flex items-center justify-center text-red-500 dark:text-red-400 font-bold uppercase">Sure?</div>
+                                                <div className="flex-1 flex items-center justify-center text-red-500 dark:text-red-400 font-bold uppercase tracking-wider text-[10px]">Sure?</div>
                                                 <button onClick={(e) => handleConfirmDelete(e, plan.id)} className="bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-200 px-4 py-1.5 rounded text-xs">Yes</button>
                                                 <button onClick={handleCancelDelete} className="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-1.5 rounded text-xs">No</button>
                                             </>
                                         ) : (
                                             <>
-                                                <button onClick={(e) => handleApply(e, plan.id)} disabled={!canApply} className={`flex-1 py-1.5 rounded text-xs font-bold ${canApply ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400' : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed'}`}>{isMaxed ? 'Completed' : 'Apply Now'}</button>
-                                                <button onClick={(e) => handleEdit(e, plan)} className="px-4 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-1.5 rounded text-xs">Edit</button>
-                                                <button onClick={(e) => handleDeleteClick(e, plan.id)} className="px-4 bg-gray-200 dark:bg-gray-800 text-red-600 dark:text-red-400 py-1.5 rounded text-xs">Del</button>
+                                                <button onClick={(e) => handleApply(e, plan.id)} disabled={!canApply} className={`flex-1 py-1.5 rounded text-xs font-bold ${canApply ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/60' : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed'}`}>{isMaxed ? 'Completed' : 'Apply Now'}</button>
+                                                <button onClick={(e) => handleEdit(e, plan)} className="px-4 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-1.5 rounded text-xs hover:bg-gray-300 dark:hover:bg-gray-700">Edit</button>
+                                                <button onClick={(e) => handleDeleteClick(e, plan.id)} className="px-4 bg-gray-200 dark:bg-gray-800 text-red-600 dark:text-red-400 py-1.5 rounded text-xs hover:bg-red-100 dark:hover:bg-red-900/30">Del</button>
                                             </>
                                         )}
                                     </div>

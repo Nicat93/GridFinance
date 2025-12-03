@@ -78,19 +78,19 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
                         </div>
 
                         {/* Right: Category, Date, Amount (Single Line) */}
-                        <div className="px-2 shrink-0 flex items-center justify-end gap-1.5 sm:gap-3 text-right">
-                             {/* Category */}
-                             <span className={`text-[10px] text-gray-400 dark:text-gray-500 ${isExpanded ? '' : 'truncate max-w-[50px] sm:max-w-[80px]'}`}>
+                        <div className="px-2 shrink-0 flex items-center justify-end gap-1.5 sm:gap-2 text-right">
+                             {/* Category Pill */}
+                             <span className={`text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 ${isExpanded ? '' : 'truncate max-w-[60px]'}`}>
                                 {tx.category}
                              </span>
                              
-                             {/* Date */}
-                             <span className="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                             {/* Date Pill */}
+                             <span className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 whitespace-nowrap">
                                 {formatShortDate(tx.date)}
                              </span>
                              
                              {/* Amount */}
-                             <span className={`text-[11px] sm:text-sm tracking-tighter font-bold whitespace-nowrap ${tx.type === 'expense' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'}`}>
+                             <span className={`text-[11px] sm:text-sm tracking-tighter font-bold whitespace-nowrap min-w-[50px] ${tx.type === 'expense' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'}`}>
                                 {tx.type === 'expense' ? '-' : '+'}{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                              </span>
                         </div>
