@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { RecurringPlan, Frequency, SortOption } from '../types';
+import { RecurringPlan, Frequency, SortOption, CategoryDef } from '../types';
 import { DesignConfig } from './DesignDebugger';
 
 interface Props {
@@ -12,9 +12,12 @@ interface Props {
   filterText: string;
   sortOption: SortOption;
   designConfig?: DesignConfig;
+  categories: CategoryDef[];
 }
 
 const PAGE_SIZE = 50;
+const KNOWN_COLORS = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
+
 
 // --- Date Helpers ---
 const parseLocalDate = (dateStr: string): Date => {
@@ -34,7 +37,7 @@ const addTimeLocal = (date: string | Date, freq: Frequency, count: number): Date
 };
 
 // --- Component ---
-const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, currentPeriodEnd, filterText, sortOption, designConfig }) => {
+const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, currentPeriodEnd, filterText, sortOption, designConfig, categories }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [renderLimit, setRenderLimit] = useState(PAGE_SIZE);
@@ -67,14 +70,11 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
             case 'category':
                 return a.category.localeCompare(b.category);
             case 'date_asc':
-            case 'date_desc': // For plans, we default to Next Due Date for both date sorts, though we could reverse for desc
+            case 'date_desc': 
             default:
                 const dateA = addTimeLocal(a.startDate, a.frequency, a.occurrencesGenerated);
                 const dateB = addTimeLocal(b.startDate, b.frequency, b.occurrencesGenerated);
                 
-                // If sorting by date descending (Newest), we reverse the logic? 
-                // Usually for "Plans" users want to see "Next Due" first (ASC). 
-                // But if they explicitly asked for DESC (Newest), we'll flip it.
                 if (sortOption === 'date_desc') {
                     const dateDiff = dateB.getTime() - dateA.getTime();
                     if (dateDiff !== 0) return dateDiff;
@@ -111,15 +111,63 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
       return `${date.getMonth() + 1}-${date.getDate()}`;
   };
 
+  const getCategoryStyle = (catName: string): { className: string, style?: React.CSSProperties } => {
+      const def = categories.find(c => c.name.toLowerCase() === catName.toLowerCase());
+      const color = def ? def.color : 'gray';
+      
+      if (KNOWN_COLORS.includes(color)) {
+          switch(color) {
+            case 'slate': return { className: 'bg-slate-100 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400' };
+            case 'red': return { className: 'bg-red-100 dark:bg-red-900/40 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400' };
+            case 'orange': return { className: 'bg-orange-100 dark:bg-orange-900/40 border-orange-200 dark:border-orange-800 text-orange-600 dark:text-orange-400' };
+            case 'amber': return { className: 'bg-amber-100 dark:bg-amber-900/40 border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400' };
+            case 'yellow': return { className: 'bg-yellow-100 dark:bg-yellow-900/40 border-yellow-200 dark:border-yellow-800 text-yellow-600 dark:text-yellow-400' };
+            case 'lime': return { className: 'bg-lime-100 dark:bg-lime-900/40 border-lime-200 dark:border-lime-800 text-lime-600 dark:text-lime-400' };
+            case 'green': return { className: 'bg-green-100 dark:bg-green-900/40 border-green-200 dark:border-green-800 text-green-600 dark:text-green-400' };
+            case 'emerald': return { className: 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400' };
+            case 'teal': return { className: 'bg-teal-100 dark:bg-teal-900/40 border-teal-200 dark:border-teal-800 text-teal-600 dark:text-teal-400' };
+            case 'cyan': return { className: 'bg-cyan-100 dark:bg-cyan-900/40 border-cyan-200 dark:border-cyan-800 text-cyan-600 dark:text-cyan-400' };
+            case 'sky': return { className: 'bg-sky-100 dark:bg-sky-900/40 border-sky-200 dark:border-sky-800 text-sky-600 dark:text-sky-400' };
+            case 'blue': return { className: 'bg-blue-100 dark:bg-blue-900/40 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400' };
+            case 'indigo': return { className: 'bg-indigo-100 dark:bg-indigo-900/40 border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400' };
+            case 'violet': return { className: 'bg-violet-100 dark:bg-violet-900/40 border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400' };
+            case 'purple': return { className: 'bg-purple-100 dark:bg-purple-900/40 border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400' };
+            case 'fuchsia': return { className: 'bg-fuchsia-100 dark:bg-fuchsia-900/40 border-fuchsia-200 dark:border-fuchsia-800 text-fuchsia-600 dark:text-fuchsia-400' };
+            case 'pink': return { className: 'bg-pink-100 dark:bg-pink-900/40 border-pink-200 dark:border-pink-800 text-pink-600 dark:text-pink-400' };
+            case 'rose': return { className: 'bg-rose-100 dark:bg-rose-900/40 border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400' };
+            default: return { className: 'bg-gray-100 dark:bg-gray-800/60 border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400' };
+        }
+      } else {
+          return {
+            className: 'border',
+            style: {
+                backgroundColor: color + '22',
+                color: color,
+                borderColor: color + '44'
+            }
+        };
+      }
+  };
+
   // Dynamic Styles from Design Config
   const rowStyle = designConfig ? {
       paddingTop: `${designConfig.paddingY}rem`,
       paddingBottom: `${designConfig.paddingY}rem`,
   } : {};
   
-  const descStyle = designConfig ? { fontSize: `${designConfig.fontSize}px` } : {};
-  const amountStyle = designConfig ? { fontSize: `${Math.max(10, designConfig.fontSize - 1)}px` } : {};
-  const pillStyle = designConfig ? { fontSize: `${Math.max(9, designConfig.fontSize - 2)}px` } : {};
+  const descStyle = designConfig ? { 
+      fontSize: `${designConfig.fontSize}px`,
+      fontWeight: designConfig.fontWeightDesc
+  } : {};
+  const amountStyle = designConfig ? { 
+      fontSize: `${Math.max(10, designConfig.fontSize - 1)}px`,
+      fontWeight: designConfig.fontWeightAmount,
+      letterSpacing: `${designConfig.tracking}em`
+  } : {};
+  const pillStyle = designConfig ? { 
+      fontSize: `${Math.max(9, designConfig.fontSize - 2)}px`,
+      borderRadius: `${designConfig.pillRadius}px`
+  } : {};
 
   return (
     <div className="w-full">
@@ -146,16 +194,16 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
                         const isFuture = nextDate >= today;
                         const isMaxed = plan.maxOccurrences ? plan.occurrencesGenerated >= plan.maxOccurrences : false;
                         const canApply = !isMaxed;
-                        
+                        const catStyle = getCategoryStyle(plan.category);
+
                         // Status Logic
                         const isLate = nextDate < today;
                         const isUpcomingInPeriod = nextDate >= today && nextDate <= periodEnd;
-                        // If it's maxed or in next cycle, we don't show a mark
                         const showMark = !isMaxed && (isLate || isUpcomingInPeriod);
 
                         let markColor = 'bg-transparent';
-                        if (isLate) markColor = 'bg-rose-500'; // Late (Red)
-                        else if (isUpcomingInPeriod) markColor = 'bg-orange-500'; // Upcoming in this period (Orange)
+                        if (isLate) markColor = 'bg-rose-500'; 
+                        else if (isUpcomingInPeriod) markColor = 'bg-orange-500';
 
                         const progressPercent = plan.maxOccurrences 
                             ? Math.min((plan.occurrencesGenerated / plan.maxOccurrences) * 100, 100) 
@@ -164,7 +212,7 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
                         return (
                             <div key={plan.id} className="group flex flex-col hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
                                 
-                                {/* Main Row - Styled via Design Config */}
+                                {/* Main Row */}
                                 <div 
                                     className={`flex items-center cursor-pointer ${isExpanded ? 'bg-gray-50 dark:bg-gray-900/40 items-start' : ''}`}
                                     style={rowStyle}
@@ -172,12 +220,11 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
                                 >
                                     {/* Left: Indicator & Description */}
                                     <div className="px-2 flex-1 min-w-0 flex items-center gap-2 self-start">
-                                        {/* Status Indicator */}
                                         <div className={`w-1 h-3 rounded-full shrink-0 mt-0.5 transition-colors ${showMark ? markColor : 'bg-transparent'}`}></div>
                                         
                                         <div className="flex-1 min-w-0">
                                             <div 
-                                                className={`text-gray-700 dark:text-gray-200 font-medium leading-tight transition-all ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}
+                                                className={`text-gray-700 dark:text-gray-200 leading-tight transition-all ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}
                                                 style={descStyle}
                                             >
                                                 {plan.description}
@@ -185,19 +232,21 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
                                         </div>
                                     </div>
 
-                                    {/* Right: Category, Date, Amount (Single Line) */}
+                                    {/* Right: Category, Date, Amount */}
                                     <div className="px-2 shrink-0 flex items-center justify-end gap-1.5 sm:gap-2 text-right">
-                                        {/* Category Pill */}
-                                        <span 
-                                            className={`px-1.5 py-0 rounded bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 h-4 flex items-center ${isExpanded ? '' : 'truncate max-w-[60px]'}`}
-                                            style={pillStyle}
-                                        >
-                                            {plan.category}
-                                        </span>
+                                        {/* Category Pill - Conditional */}
+                                        {plan.category && (
+                                            <span 
+                                                className={`px-1.5 py-0 h-4 flex items-center ${catStyle.className || ''} ${isExpanded ? '' : 'truncate max-w-[60px]'}`}
+                                                style={{ ...pillStyle, ...catStyle.style }}
+                                            >
+                                                {plan.category}
+                                            </span>
+                                        )}
 
                                         {/* Date Pill */}
                                         <span 
-                                            className={`px-1.5 py-0 rounded border whitespace-nowrap h-4 flex items-center ${
+                                            className={`px-1.5 py-0 border whitespace-nowrap h-4 flex items-center ${
                                             isLate && !isMaxed
                                             ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-900/40 text-rose-600 dark:text-rose-500 font-bold'
                                             : (!isFuture && !isMaxed) 
@@ -211,7 +260,7 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
                                         
                                         {/* Amount */}
                                         <span 
-                                            className={`tracking-tighter font-bold whitespace-nowrap min-w-[45px] ${plan.type === 'income' ? 'text-emerald-500 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
+                                            className={`whitespace-nowrap min-w-[45px] ${plan.type === 'income' ? 'text-emerald-500 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
                                             style={amountStyle}
                                         >
                                             {plan.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -225,7 +274,6 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
                                         className="bg-gray-50 dark:bg-gray-900/50 px-2 pb-2 text-[11px] text-gray-500 flex flex-col gap-2 cursor-default" 
                                         onClick={(e) => e.stopPropagation()}
                                     >
-                                        {/* Additional Info (Progress) */}
                                         {plan.maxOccurrences && plan.frequency !== Frequency.ONE_TIME && (
                                             <div className="flex items-center gap-2 text-[9px] sm:text-[10px]">
                                                 <span className="font-mono">
@@ -237,7 +285,6 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
                                             </div>
                                         )}
 
-                                        {/* Action Buttons */}
                                         <div className="flex gap-2 pt-1 border-t border-gray-200 dark:border-gray-800/50 mt-1 relative z-10">
                                             {isDeleting ? (
                                                 <>
@@ -258,8 +305,7 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
                             </div>
                         );
                     })}
-
-                    {/* Load More Button */}
+                    
                     {filteredAndSorted.length > visiblePlans.length && (
                         <div className="p-2 text-center">
                             <button 

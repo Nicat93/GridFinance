@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Transaction, SortOption } from '../types';
+import { Transaction, SortOption, CategoryDef } from '../types';
 import { DesignConfig } from './DesignDebugger';
 
 interface Props {
@@ -10,11 +10,13 @@ interface Props {
   filterText: string;
   sortOption: SortOption;
   designConfig?: DesignConfig;
+  categories: CategoryDef[];
 }
 
 const PAGE_SIZE = 50;
+const KNOWN_COLORS = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
 
-const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit, filterText, sortOption, designConfig }) => {
+const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit, filterText, sortOption, designConfig, categories }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [renderLimit, setRenderLimit] = useState(PAGE_SIZE);
@@ -68,6 +70,46 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit, filt
       return `${parts[1]}-${parts[2]}`;
   };
 
+  const getCategoryStyle = (catName: string): { className: string, style?: React.CSSProperties } => {
+      const def = categories.find(c => c.name.toLowerCase() === catName.toLowerCase());
+      const color = def ? def.color : 'gray';
+      
+      if (KNOWN_COLORS.includes(color)) {
+        switch(color) {
+            case 'slate': return { className: 'bg-slate-100 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400' };
+            case 'red': return { className: 'bg-red-100 dark:bg-red-900/40 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400' };
+            case 'orange': return { className: 'bg-orange-100 dark:bg-orange-900/40 border-orange-200 dark:border-orange-800 text-orange-600 dark:text-orange-400' };
+            case 'amber': return { className: 'bg-amber-100 dark:bg-amber-900/40 border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400' };
+            case 'yellow': return { className: 'bg-yellow-100 dark:bg-yellow-900/40 border-yellow-200 dark:border-yellow-800 text-yellow-600 dark:text-yellow-400' };
+            case 'lime': return { className: 'bg-lime-100 dark:bg-lime-900/40 border-lime-200 dark:border-lime-800 text-lime-600 dark:text-lime-400' };
+            case 'green': return { className: 'bg-green-100 dark:bg-green-900/40 border-green-200 dark:border-green-800 text-green-600 dark:text-green-400' };
+            case 'emerald': return { className: 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400' };
+            case 'teal': return { className: 'bg-teal-100 dark:bg-teal-900/40 border-teal-200 dark:border-teal-800 text-teal-600 dark:text-teal-400' };
+            case 'cyan': return { className: 'bg-cyan-100 dark:bg-cyan-900/40 border-cyan-200 dark:border-cyan-800 text-cyan-600 dark:text-cyan-400' };
+            case 'sky': return { className: 'bg-sky-100 dark:bg-sky-900/40 border-sky-200 dark:border-sky-800 text-sky-600 dark:text-sky-400' };
+            case 'blue': return { className: 'bg-blue-100 dark:bg-blue-900/40 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400' };
+            case 'indigo': return { className: 'bg-indigo-100 dark:bg-indigo-900/40 border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400' };
+            case 'violet': return { className: 'bg-violet-100 dark:bg-violet-900/40 border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400' };
+            case 'purple': return { className: 'bg-purple-100 dark:bg-purple-900/40 border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-400' };
+            case 'fuchsia': return { className: 'bg-fuchsia-100 dark:bg-fuchsia-900/40 border-fuchsia-200 dark:border-fuchsia-800 text-fuchsia-600 dark:text-fuchsia-400' };
+            case 'pink': return { className: 'bg-pink-100 dark:bg-pink-900/40 border-pink-200 dark:border-pink-800 text-pink-600 dark:text-pink-400' };
+            case 'rose': return { className: 'bg-rose-100 dark:bg-rose-900/40 border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400' };
+            default: return { className: 'bg-gray-100 dark:bg-gray-800/60 border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400' };
+        }
+      } else {
+        // Custom Color (Hex, etc.)
+        // We assume 'color' is a valid CSS string
+        return {
+            className: 'border',
+            style: {
+                backgroundColor: color + '22', // Low opacity background
+                color: color,
+                borderColor: color + '44' // Med opacity border
+            }
+        };
+      }
+  };
+
   // --- Handlers ---
   const handleDeleteClick = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(id); };
   const handleConfirmDelete = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); onDelete(id); setConfirmDeleteId(null); };
@@ -82,10 +124,21 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit, filt
       paddingBottom: `${designConfig.paddingY}rem`,
   } : {};
   
-  const descStyle = designConfig ? { fontSize: `${designConfig.fontSize}px` } : {};
-  // Scale amount and pills relative to base font size
-  const amountStyle = designConfig ? { fontSize: `${Math.max(10, designConfig.fontSize - 1)}px` } : {};
-  const pillStyle = designConfig ? { fontSize: `${Math.max(9, designConfig.fontSize - 2)}px` } : {};
+  const descStyle = designConfig ? { 
+      fontSize: `${designConfig.fontSize}px`,
+      fontWeight: designConfig.fontWeightDesc
+  } : {};
+  
+  const amountStyle = designConfig ? { 
+      fontSize: `${Math.max(10, designConfig.fontSize - 1)}px`,
+      fontWeight: designConfig.fontWeightAmount,
+      letterSpacing: `${designConfig.tracking}em`
+  } : {};
+  
+  const pillStyle = designConfig ? { 
+      fontSize: `${Math.max(9, designConfig.fontSize - 2)}px`,
+      borderRadius: `${designConfig.pillRadius}px`
+  } : {};
 
 
   return (
@@ -108,6 +161,7 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit, filt
                     {visibleTransactions.map((tx) => {
                     const isExpanded = expandedId === tx.id;
                     const isDeleting = confirmDeleteId === tx.id;
+                    const catStyle = getCategoryStyle(tx.category);
                     
                     return (
                         <div key={tx.id} className="group flex flex-col hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
@@ -121,7 +175,7 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit, filt
                                 {/* Left: Description */}
                                 <div className="px-2 flex-1 min-w-0">
                                     <div 
-                                        className={`text-gray-700 dark:text-gray-200 font-medium leading-tight transition-all ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}
+                                        className={`text-gray-700 dark:text-gray-200 leading-tight transition-all ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}
                                         style={descStyle}
                                     >
                                         {tx.description}
@@ -130,17 +184,19 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit, filt
 
                                 {/* Right: Category, Date, Amount (Single Line) */}
                                 <div className="px-2 shrink-0 flex items-center justify-end gap-1.5 sm:gap-2 text-right">
-                                    {/* Category Pill */}
-                                    <span 
-                                        className={`px-1.5 py-0 rounded bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 h-4 flex items-center ${isExpanded ? '' : 'truncate max-w-[60px]'}`}
-                                        style={pillStyle}
-                                    >
-                                        {tx.category}
-                                    </span>
+                                    {/* Category Pill - Conditional */}
+                                    {tx.category && (
+                                        <span 
+                                            className={`px-1.5 py-0 h-4 flex items-center ${catStyle.className || ''} ${isExpanded ? '' : 'truncate max-w-[60px]'}`}
+                                            style={{ ...pillStyle, ...catStyle.style }}
+                                        >
+                                            {tx.category}
+                                        </span>
+                                    )}
                                     
                                     {/* Date Pill */}
                                     <span 
-                                        className="px-1.5 py-0 rounded bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 whitespace-nowrap h-4 flex items-center"
+                                        className="px-1.5 py-0 bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 whitespace-nowrap h-4 flex items-center"
                                         style={pillStyle}
                                     >
                                         {formatShortDate(tx.date)}
@@ -148,7 +204,7 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit, filt
                                     
                                     {/* Amount */}
                                     <span 
-                                        className={`tracking-tighter font-bold whitespace-nowrap min-w-[45px] ${tx.type === 'expense' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'}`}
+                                        className={`whitespace-nowrap min-w-[45px] ${tx.type === 'expense' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'}`}
                                         style={amountStyle}
                                     >
                                         {tx.type === 'expense' ? '-' : '+'}{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

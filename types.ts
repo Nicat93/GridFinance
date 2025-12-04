@@ -10,6 +10,12 @@ export enum Frequency {
 
 export type SortOption = 'date_desc' | 'date_asc' | 'description_asc' | 'amount_desc' | 'category';
 
+export interface CategoryDef {
+  id: string;
+  name: string;
+  color: string; // e.g., 'red', 'blue', 'emerald'
+}
+
 /**
  * Represents a single financial transaction (income or expense).
  */
@@ -80,6 +86,7 @@ export interface BackupData {
   lastModified?: number;
   /** Tombstones for sync: { id: timestampOfDeletion } */
   deletedIds?: { [id: string]: number };
+  categoryDefs?: CategoryDef[];
 }
 
 /**

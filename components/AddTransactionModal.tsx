@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { Frequency, TransactionType, Transaction, RecurringPlan } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { Frequency, TransactionType, Transaction, RecurringPlan, CategoryDef } from '../types';
 import CalculatorSheet from './CalculatorSheet';
 
 interface Props {
@@ -8,14 +8,16 @@ interface Props {
   onClose: () => void;
   onSave: (data: any) => void;
   initialData?: Transaction | RecurringPlan | null;
-  categories: string[];
+  categories: CategoryDef[];
 }
+
+const KNOWN_COLORS = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
 
 const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initialData, categories }) => {
   const [type, setType] = useState<TransactionType>('expense');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('General');
+  const [category, setCategory] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   
   const [isRecurring, setIsRecurring] = useState(false);
@@ -24,6 +26,10 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
 
   // Calculator State
   const [calcTarget, setCalcTarget] = useState<'amount' | 'maxOccurrences' | null>(null);
+
+  // Category Dropdown State
+  const [isCatDropdownOpen, setIsCatDropdownOpen] = useState(false);
+  const catInputRef = useRef<HTMLInputElement>(null);
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -43,7 +49,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
         setType(initialData.type);
         setAmount(initialData.amount.toString());
         setDescription(initialData.description || '');
-        setCategory(initialData.category);
+        setCategory(initialData.category || '');
         
         if ('frequency' in initialData) {
             const plan = initialData as RecurringPlan;
@@ -62,7 +68,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
         setType('expense');
         setAmount('');
         setDescription('');
-        setCategory('General');
+        setCategory('');
         setDate(new Date().toISOString().split('T')[0]);
         setIsRecurring(false);
         setFrequency(Frequency.MONTHLY);
@@ -114,10 +120,46 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
       }
   };
 
+  const getColorStyle = (color: string) => {
+    if (KNOWN_COLORS.includes(color)) {
+        switch(color) {
+            case 'slate': return { className: 'bg-slate-500' };
+            case 'gray': return { className: 'bg-gray-500' };
+            case 'red': return { className: 'bg-red-500' };
+            case 'orange': return { className: 'bg-orange-500' };
+            case 'amber': return { className: 'bg-amber-500' };
+            case 'yellow': return { className: 'bg-yellow-500' };
+            case 'lime': return { className: 'bg-lime-500' };
+            case 'green': return { className: 'bg-green-500' };
+            case 'emerald': return { className: 'bg-emerald-500' };
+            case 'teal': return { className: 'bg-teal-500' };
+            case 'cyan': return { className: 'bg-cyan-500' };
+            case 'sky': return { className: 'bg-sky-500' };
+            case 'blue': return { className: 'bg-blue-500' };
+            case 'indigo': return { className: 'bg-indigo-500' };
+            case 'violet': return { className: 'bg-violet-500' };
+            case 'purple': return { className: 'bg-purple-500' };
+            case 'fuchsia': return { className: 'bg-fuchsia-500' };
+            case 'pink': return { className: 'bg-pink-500' };
+            case 'rose': return { className: 'bg-rose-500' };
+            default: return { className: 'bg-gray-500' };
+        }
+    } else {
+        return { style: { backgroundColor: color } };
+    }
+  };
+
+  const filteredCategories = categories.filter(c => 
+    c.name.toLowerCase().includes(category.toLowerCase())
+  ).sort((a, b) => a.name.localeCompare(b.name));
+
   return (
     <>
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-10 sm:pt-20 bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-        <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 w-full max-w-sm rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+        <div 
+            className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 w-full max-w-sm rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+            onClick={() => setIsCatDropdownOpen(false)}
+        >
             <div className="p-4 border-b border-gray-100 dark:border-gray-900 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
                 <h2 className="text-gray-800 dark:text-gray-200 font-bold text-base uppercase tracking-wide">
                     {initialData ? (isRecurring ? 'Edit Plan' : 'Edit Entry') : 'New Entry'}
@@ -128,7 +170,6 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
             <div className="flex flex-wrap items-center gap-3">
                 <div className="flex-1 min-w-[120px]">
-                    {/* Fake Input to trigger calculator for Amount */}
                     <div 
                         onClick={() => setCalcTarget('amount')}
                         className={`w-full bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white px-3 py-2 rounded text-left font-mono text-xl cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors ${!amount ? 'text-gray-400' : ''}`}
@@ -168,14 +209,52 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-                <input 
-                    type="text" 
-                    list="category-list"
-                    value={category}
-                    onChange={e => setCategory(e.target.value)}
-                    className="bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-400 px-3 py-2 rounded text-sm focus:border-indigo-500 focus:outline-none transition-colors"
-                    placeholder="Category"
-                />
+                <div className="relative">
+                    <input 
+                        ref={catInputRef}
+                        type="text" 
+                        value={category}
+                        onChange={e => setCategory(e.target.value)}
+                        onFocus={() => setIsCatDropdownOpen(true)}
+                        onClick={(e) => { e.stopPropagation(); setIsCatDropdownOpen(true); }}
+                        className="w-full bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-400 px-3 py-2 rounded text-sm focus:border-indigo-500 focus:outline-none transition-colors"
+                        placeholder="Category"
+                        autoComplete="off"
+                    />
+                    {/* Dropdown Chevron */}
+                    <div className="absolute right-2 top-2.5 pointer-events-none text-gray-400">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </div>
+
+                    {isCatDropdownOpen && (
+                        <div className="absolute z-20 left-0 right-0 mt-1 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                            {filteredCategories.length === 0 ? (
+                                <div className="p-2 text-xs text-gray-400 italic text-center">Type to add new</div>
+                            ) : (
+                                filteredCategories.map(c => {
+                                    const style = getColorStyle(c.color);
+                                    return (
+                                    <div 
+                                        key={c.id}
+                                        onClick={(e) => { 
+                                            e.stopPropagation(); 
+                                            setCategory(c.name); 
+                                            setIsCatDropdownOpen(false); 
+                                        }}
+                                        className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
+                                    >
+                                        <div 
+                                            className={`w-3 h-3 rounded-full ${style.className || ''}`}
+                                            style={style.style}
+                                        ></div>
+                                        <span>{c.name}</span>
+                                    </div>
+                                )})
+                            )}
+                        </div>
+                    )}
+                </div>
+
                 <input 
                     type="date" 
                     required
@@ -184,10 +263,6 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                     className="bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-400 px-3 py-2 rounded text-sm focus:border-indigo-500 focus:outline-none transition-colors"
                 />
             </div>
-            
-            <datalist id="category-list">
-                {categories.map(c => <option key={c} value={c} />)}
-            </datalist>
 
             <div className="pt-2">
                     <label className="flex items-center gap-2 cursor-pointer group">
@@ -240,7 +315,6 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
         </div>
         </div>
 
-        {/* Calculator Sheet Overlay */}
         <CalculatorSheet 
             isOpen={!!calcTarget}
             initialValue={calcTarget === 'amount' ? amount : maxOccurrences}

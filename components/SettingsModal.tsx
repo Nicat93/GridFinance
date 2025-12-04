@@ -15,11 +15,12 @@ interface Props {
   onAddMockData: () => void;
   showDesignDebug?: boolean;
   onToggleDesignDebug?: () => void;
+  onOpenCategoryManager: () => void;
 }
 
 const SettingsModal: React.FC<Props> = ({ 
     isOpen, onClose, isDarkMode, onToggleTheme, syncConfig, onSaveSyncConfig, onClearData,
-    onExportData, onImportData, onAddMockData, showDesignDebug, onToggleDesignDebug
+    onExportData, onImportData, onAddMockData, showDesignDebug, onToggleDesignDebug, onOpenCategoryManager
 }) => {
   const [syncId, setSyncId] = useState(syncConfig.syncId || '');
   const [enabled, setEnabled] = useState(syncConfig.enabled);
@@ -40,8 +41,8 @@ const SettingsModal: React.FC<Props> = ({
 
   const handleSaveSync = () => {
       onSaveSyncConfig({
-          supabaseUrl: syncConfig.supabaseUrl, // Persist existing values from env/storage
-          supabaseKey: syncConfig.supabaseKey, // Persist existing values from env/storage
+          supabaseUrl: syncConfig.supabaseUrl, 
+          supabaseKey: syncConfig.supabaseKey, 
           syncId: syncId.trim(),
           enabled: enabled,
           lastSyncedAt: 0
@@ -53,12 +54,10 @@ const SettingsModal: React.FC<Props> = ({
       if (e.target.files && e.target.files[0]) {
           onImportData(e.target.files[0]);
       }
-      // Reset input so same file can be selected again if needed
       if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const isConfigured = !!(syncConfig.supabaseUrl && syncConfig.supabaseKey);
-  // Valid if backend is configured AND (sync is disabled OR (sync is enabled AND key is provided))
   const canSave = isConfigured && (!enabled || syncId.trim().length > 0);
 
   if (!isOpen) return null;
@@ -75,9 +74,10 @@ const SettingsModal: React.FC<Props> = ({
 
         <div className="p-5 space-y-6 overflow-y-auto max-h-[80vh]">
             
-            {/* Appearance */}
+            {/* General */}
             <div className="space-y-3">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Appearance</h3>
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">General</h3>
+                
                 <button 
                     onClick={onToggleTheme}
                     className="w-full flex items-center justify-between px-4 py-3 bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
@@ -86,6 +86,14 @@ const SettingsModal: React.FC<Props> = ({
                     <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
                         {isDarkMode ? 'Dark Mode 🌙' : 'Light Mode ☀️'}
                     </span>
+                </button>
+
+                <button 
+                    onClick={() => { onClose(); onOpenCategoryManager(); }}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
+                >
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Manage Categories</span>
+                    <span className="text-gray-400 text-lg">›</span>
                 </button>
             </div>
 
@@ -115,9 +123,6 @@ const SettingsModal: React.FC<Props> = ({
                         onChange={handleFileChange}
                     />
                 </div>
-                <p className="text-[9px] text-gray-400 leading-tight">
-                    Download a JSON file to save to Google Drive or iCloud. Restoring will overwrite current data.
-                </p>
             </div>
 
             {/* Cloud Sync */}
@@ -137,7 +142,6 @@ const SettingsModal: React.FC<Props> = ({
                 </div>
                 
                 <div className={`space-y-3 transition-opacity ${enabled ? 'opacity-100' : 'opacity-50'}`}>
-                    
                     <div className={enabled ? '' : 'pointer-events-none'}>
                         <label className="block text-[10px] text-gray-500 mb-1">Secret Key {enabled && '*'}</label>
                         <input 
@@ -147,13 +151,6 @@ const SettingsModal: React.FC<Props> = ({
                             placeholder="e.g. my-family-budget-2024"
                             className={`w-full bg-gray-50 dark:bg-gray-900 border rounded p-2 text-xs text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-indigo-500 outline-none font-mono ${enabled && !syncId.trim() ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-700'}`}
                         />
-                        <p className="text-[9px] text-gray-400 mt-1">Unique key to identify and sync this device's data.</p>
-                    </div>
-                    
-                    <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-100 dark:border-blue-900/30">
-                        <p className="text-[9px] text-blue-600 dark:text-blue-300 leading-tight">
-                            Use the same Secret Key on all devices you want to keep in sync.
-                        </p>
                     </div>
                 </div>
                 <button 
