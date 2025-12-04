@@ -342,10 +342,10 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                                         onChange={(e) => handleFrequencyChange(e.target.value as Frequency)}
                                         className="w-full bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-300 p-1.5 rounded text-sm focus:outline-none"
                                     >
-                                        <option value={Frequency.ONE_TIME}>One-time</option>
-                                        <option value={Frequency.WEEKLY}>Weekly</option>
-                                        <option value={Frequency.MONTHLY}>Monthly</option>
-                                        <option value={Frequency.YEARLY}>Yearly</option>
+                                        <option value={Frequency.ONE_TIME}>{t.freqOneTime}</option>
+                                        <option value={Frequency.WEEKLY}>{t.freqWeekly}</option>
+                                        <option value={Frequency.MONTHLY}>{t.freqMonthly}</option>
+                                        <option value={Frequency.YEARLY}>{t.freqYearly}</option>
                                     </select>
                                 </div>
                                 <div>
@@ -361,7 +361,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
 
                             {/* Loan Checkbox Row - Moved Below Frequency */}
                             {!initialData && (
-                                <div className="pt-3 border-t border-gray-200 dark:border-gray-800/50 flex items-center justify-between gap-2">
+                                <div className="pt-3 border-t border-gray-200 dark:border-gray-800/50 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
                                     <label className="flex items-center gap-2 cursor-pointer group shrink-0">
                                         <input 
                                             type="checkbox" 
@@ -386,14 +386,14 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                                     </label>
 
                                     {isLoan && (
-                                        <div className="animate-in fade-in slide-in-from-right-2 flex-1 max-w-[50%]">
+                                        <div className="animate-in fade-in slide-in-from-right-2 flex-1 min-w-[120px] max-w-[60%] sm:max-w-[50%] ml-auto sm:ml-0">
                                             <label className="block text-[9px] text-gray-500 dark:text-gray-600 uppercase mb-0.5 text-right">{t.repaymentStart}</label>
                                             <input 
                                                 type="date" 
                                                 required
                                                 value={planStartDate}
                                                 onChange={e => setPlanStartDate(e.target.value)}
-                                                className="w-full bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-300 p-1 rounded text-xs focus:outline-none"
+                                                className="w-full bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-300 p-1 rounded text-xs focus:outline-none min-w-0"
                                             />
                                         </div>
                                     )}
