@@ -199,7 +199,11 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
         >
         <div 
             className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 w-full max-w-sm rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+                e.stopPropagation();
+                // Close dropdown if clicked outside of it (but inside modal)
+                if (isCatDropdownOpen) setIsCatDropdownOpen(false);
+            }}
         >
             <div className="p-4 border-b border-gray-100 dark:border-gray-900 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
                 <h2 className="text-gray-800 dark:text-gray-200 font-bold text-base uppercase tracking-wide">
@@ -267,7 +271,10 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                     </div>
 
                     {isCatDropdownOpen && (
-                        <div className="absolute z-20 left-0 right-0 mt-1 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                        <div 
+                            className="absolute z-20 left-0 right-0 mt-1 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg shadow-xl max-h-48 overflow-y-auto"
+                            onClick={(e) => e.stopPropagation()}
+                        >
                             {filteredCategories.length === 0 && category.trim() !== '' && (
                                 <div 
                                     className="p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 flex items-center gap-2"
