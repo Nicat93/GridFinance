@@ -41,7 +41,7 @@ const FilterBar: React.FC<Props> = ({ filterText, onFilterChange, sortOption, on
             className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded px-2 py-1.5 text-xs text-gray-800 dark:text-gray-200 focus:outline-none cursor-pointer"
         >
             <option value="date_desc">Newest</option>
-            <option value="date_asc">Oldest / Next Due</option>
+            <option value="date_asc">Next Due</option>
             <option value="description_asc">A-Z</option>
             <option value="amount_desc">Amount High</option>
             <option value="category">Category</option>

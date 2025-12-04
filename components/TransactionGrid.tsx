@@ -35,7 +35,8 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit, filt
     result.sort((a, b) => {
         switch (sortOption) {
             case 'date_asc':
-                return new Date(a.date).getTime() - new Date(b.date).getTime();
+                // For "Next Due" option, History should be Newest first (Descending)
+                return new Date(b.date).getTime() - new Date(a.date).getTime();
             case 'description_asc':
                 return a.description.localeCompare(b.description);
             case 'amount_desc':
