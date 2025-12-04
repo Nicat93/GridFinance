@@ -12,8 +12,6 @@ export type SortOption = 'date_desc' | 'date_asc' | 'description_asc' | 'amount_
 
 export type LanguageCode = 'en' | 'az' | 'ru' | 'tr';
 
-export type CurrencyCode = 'USD' | 'EUR' | 'GBP' | 'TRY' | 'AZN' | 'RUB';
-
 export interface CategoryDef {
   id: string;
   name: string;

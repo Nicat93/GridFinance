@@ -1,6 +1,6 @@
 
 import React, { useEffect } from 'react';
-import { RecurringPlan, Frequency, LanguageCode, CurrencyCode } from '../types';
+import { RecurringPlan, Frequency, LanguageCode } from '../types';
 import { translations } from '../translations';
 
 interface Props {
@@ -11,7 +11,6 @@ interface Props {
   onContinue: () => void;
   onCancel: () => void;
   language: LanguageCode;
-  currency: CurrencyCode;
 }
 
 const PeriodTransitionModal: React.FC<Props> = ({ 
@@ -21,8 +20,7 @@ const PeriodTransitionModal: React.FC<Props> = ({
     onResolve, 
     onContinue, 
     onCancel,
-    language,
-    currency
+    language
 }) => {
   const t = translations[language];
 
@@ -76,7 +74,7 @@ const PeriodTransitionModal: React.FC<Props> = ({
                                 </div>
                             </div>
                             <div className={`font-mono font-bold text-sm ${plan.type === 'expense' ? 'text-rose-600 dark:text-rose-500' : 'text-emerald-600 dark:text-emerald-500'}`}>
-                                {plan.amount.toLocaleString(undefined, { style: 'currency', currency: currency })}
+                                {plan.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
                         </div>
                         

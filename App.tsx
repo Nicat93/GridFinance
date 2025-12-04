@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus, TransactionType, SortOption, CategoryDef, LanguageCode, CurrencyCode } from './types';
+import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus, TransactionType, SortOption, CategoryDef, LanguageCode } from './types';
 import TransactionGrid from './components/TransactionGrid';
 import SummaryBar from './components/SummaryBar';
 import AddTransactionModal from './components/AddTransactionModal';
@@ -125,11 +125,6 @@ export default function App() {
       return (saved as LanguageCode) || 'en';
   });
 
-  const [currency, setCurrency] = useState<CurrencyCode>(() => {
-      const saved = localStorage.getItem('currency');
-      return (saved as CurrencyCode) || 'USD';
-  });
-
   const [viewDate, setViewDate] = useState<Date>(() => new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -174,7 +169,6 @@ export default function App() {
   useEffect(() => { localStorage.setItem('syncConfig', JSON.stringify(syncConfig)); }, [syncConfig]);
   useEffect(() => { localStorage.setItem('theme', isDarkMode ? 'dark' : 'light'); }, [isDarkMode]);
   useEffect(() => { localStorage.setItem('language', language); }, [language]);
-  useEffect(() => { localStorage.setItem('currency', currency); }, [currency]);
 
   // --- Effects: Theme ---
   useEffect(() => {
@@ -747,7 +741,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen pb-20 bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-300 font-sans transition-colors relative">
-      <SummaryBar snapshot={snapshot} onUpdateDate={handleUpdateBillingDate} syncStatus={syncStatus} language={language} currency={currency} />
+      <SummaryBar snapshot={snapshot} onUpdateDate={handleUpdateBillingDate} syncStatus={syncStatus} language={language} />
       
       <main className="max-w-4xl mx-auto px-4">
         <FilterBar 
@@ -810,7 +804,7 @@ export default function App() {
           className="fixed bottom-6 left-6 w-10 h-10 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-105 active:scale-95 z-40 border border-gray-300 dark:border-gray-700"
           title={t.settings}
       >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 11-6 0 3 3 0 016 0z" /></svg>
       </button>
 
       {syncStatus !== 'offline' && (
@@ -840,7 +834,6 @@ export default function App() {
         showDesignDebug={showDesignDebug} onToggleDesignDebug={() => setShowDesignDebug(!showDesignDebug)}
         onOpenCategoryManager={() => setIsCategoryManagerOpen(true)}
         language={language} onLanguageChange={setLanguage}
-        currency={currency} onCurrencyChange={setCurrency}
       />
       <CategoryManager 
         isOpen={isCategoryManagerOpen}
@@ -877,7 +870,7 @@ export default function App() {
           <PeriodTransitionModal
             isOpen={transitionState.isOpen} targetDate={transitionState.targetDate} pendingPlans={transitionState.pendingItems}
             onResolve={handleResolveTransitionItem} onContinue={handleFinishTransition} onCancel={() => setTransitionState(null)}
-            language={language} currency={currency}
+            language={language}
           />
       )}
     </div>
