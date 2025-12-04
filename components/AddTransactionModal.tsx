@@ -13,6 +13,16 @@ interface Props {
 
 const KNOWN_COLORS = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
 
+// Deterministic color picker based on string hash
+const pickColorForString = (str: string): string => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const index = Math.abs(hash) % KNOWN_COLORS.length;
+    return KNOWN_COLORS[index];
+};
+
 const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initialData, categories }) => {
   const [type, setType] = useState<TransactionType>('expense');
   const [amount, setAmount] = useState('');
@@ -153,6 +163,10 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
     c.name.toLowerCase().includes(category.toLowerCase())
   ).sort((a, b) => a.name.localeCompare(b.name));
 
+  // Determine implied color for new category
+  const newCategoryColor = category ? pickColorForString(category) : 'gray';
+  const newCategoryStyle = getColorStyle(newCategoryColor);
+
   return (
     <>
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-10 sm:pt-20 bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
@@ -228,29 +242,42 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
 
                     {isCatDropdownOpen && (
                         <div className="absolute z-20 left-0 right-0 mt-1 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                            {filteredCategories.length === 0 ? (
-                                <div className="p-2 text-xs text-gray-400 italic text-center">Type to add new</div>
-                            ) : (
-                                filteredCategories.map(c => {
-                                    const style = getColorStyle(c.color);
-                                    return (
-                                    <div 
-                                        key={c.id}
-                                        onClick={(e) => { 
-                                            e.stopPropagation(); 
-                                            setCategory(c.name); 
-                                            setIsCatDropdownOpen(false); 
-                                        }}
-                                        className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
-                                    >
-                                        <div 
-                                            className={`w-3 h-3 rounded-full ${style.className || ''}`}
-                                            style={style.style}
-                                        ></div>
-                                        <span>{c.name}</span>
-                                    </div>
-                                )})
+                            {filteredCategories.length === 0 && category.trim() !== '' && (
+                                <div 
+                                    className="p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 flex items-center gap-2"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        // Auto-select; App.tsx handles creation on save
+                                        setIsCatDropdownOpen(false);
+                                    }}
+                                >
+                                    <div className={`w-3 h-3 rounded-full ${newCategoryStyle.className || ''}`} style={newCategoryStyle.style}></div>
+                                    <span className="text-sm text-gray-600 dark:text-gray-300">Create "<strong>{category}</strong>"</span>
+                                </div>
                             )}
+                            {filteredCategories.length === 0 && !category.trim() && (
+                                <div className="p-2 text-xs text-gray-400 italic text-center">Type to add new</div>
+                            )}
+                            
+                            {filteredCategories.map(c => {
+                                const style = getColorStyle(c.color);
+                                return (
+                                <div 
+                                    key={c.id}
+                                    onClick={(e) => { 
+                                        e.stopPropagation(); 
+                                        setCategory(c.name); 
+                                        setIsCatDropdownOpen(false); 
+                                    }}
+                                    className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
+                                >
+                                    <div 
+                                        className={`w-3 h-3 rounded-full ${style.className || ''}`}
+                                        style={style.style}
+                                    ></div>
+                                    <span>{c.name}</span>
+                                </div>
+                            )})}
                         </div>
                     )}
                 </div>

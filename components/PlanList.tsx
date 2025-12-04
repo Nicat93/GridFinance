@@ -13,6 +13,8 @@ interface Props {
   sortOption: SortOption;
   designConfig?: DesignConfig;
   categories: CategoryDef[];
+  startDate?: string;
+  endDate?: string;
 }
 
 const PAGE_SIZE = 50;
@@ -37,7 +39,11 @@ const addTimeLocal = (date: string | Date, freq: Frequency, count: number): Date
 };
 
 // --- Component ---
-const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, currentPeriodEnd, filterText, sortOption, designConfig, categories }) => {
+const PlanList: React.FC<Props> = ({ 
+    plans, onDelete, onApplyNow, onEdit, 
+    currentPeriodEnd, filterText, sortOption, designConfig, categories,
+    startDate, endDate
+}) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [renderLimit, setRenderLimit] = useState(PAGE_SIZE);
@@ -45,13 +51,25 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
   const filteredAndSorted = useMemo(() => {
     let result = [...plans];
 
-    // Filter
+    // Filter by Text
     if (filterText.trim()) {
         const lower = filterText.toLowerCase();
         result = result.filter(p => 
             p.description.toLowerCase().includes(lower) || 
             (p.category && p.category.toLowerCase().includes(lower))
         );
+    }
+
+    // Filter by Date Range (Using calculated Next Date)
+    if (startDate || endDate) {
+        result = result.filter(p => {
+             const nextDate = addTimeLocal(p.startDate, p.frequency, p.occurrencesGenerated);
+             const nextDateStr = nextDate.toISOString().split('T')[0];
+             
+             if (startDate && nextDateStr < startDate) return false;
+             if (endDate && nextDateStr > endDate) return false;
+             return true;
+        });
     }
 
     // Sort
@@ -88,7 +106,7 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
     });
 
     return result;
-  }, [plans, filterText, sortOption]);
+  }, [plans, filterText, sortOption, startDate, endDate]);
 
   const visiblePlans = useMemo(() => {
       return filteredAndSorted.slice(0, renderLimit);

@@ -11,12 +11,18 @@ interface Props {
   sortOption: SortOption;
   designConfig?: DesignConfig;
   categories: CategoryDef[];
+  startDate?: string;
+  endDate?: string;
 }
 
 const PAGE_SIZE = 50;
 const KNOWN_COLORS = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
 
-const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit, filterText, sortOption, designConfig, categories }) => {
+const TransactionGrid: React.FC<Props> = ({ 
+    transactions, onDelete, onEdit, 
+    filterText, sortOption, designConfig, categories,
+    startDate, endDate
+}) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [renderLimit, setRenderLimit] = useState(PAGE_SIZE);
@@ -24,13 +30,21 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit, filt
   const filteredAndSorted = useMemo(() => {
     let result = [...transactions];
 
-    // Filter
+    // Filter by Text
     if (filterText.trim()) {
         const lower = filterText.toLowerCase();
         result = result.filter(t => 
             t.description.toLowerCase().includes(lower) || 
             (t.category && t.category.toLowerCase().includes(lower))
         );
+    }
+
+    // Filter by Date Range
+    if (startDate) {
+        result = result.filter(t => t.date >= startDate);
+    }
+    if (endDate) {
+        result = result.filter(t => t.date <= endDate);
     }
 
     // Sort
@@ -56,7 +70,7 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit, filt
     });
 
     return result;
-  }, [transactions, filterText, sortOption]);
+  }, [transactions, filterText, sortOption, startDate, endDate]);
 
   // Performance Optimization
   const visibleTransactions = useMemo(() => {
