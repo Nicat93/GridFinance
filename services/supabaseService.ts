@@ -1,6 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { BackupData, SyncConfig, Transaction, RecurringPlan } from '../types';
+import { BackupData, SyncConfig, Transaction, RecurringPlan, CategoryDef } from '../types';
 
 let supabase: any = null;
 
@@ -31,9 +31,6 @@ export const pullChanges = async (config: SyncConfig, lastSyncedAt: number) => {
     if (!supabase || !config.syncId) return null;
 
     // SAFETY BUFFER: Subtract 5 minutes (300,000ms) from lastSyncedAt.
-    // This accounts for clock skew between devices. If Device A is 2 mins behind Device B,
-    // Device B might otherwise miss Device A's updates. 
-    // Since mergeDeltas handles duplicates safely, fetching overlapping data is fine.
     const bufferedTimestamp = Math.max(0, lastSyncedAt - 300000);
 
     try {
@@ -54,8 +51,19 @@ export const pullChanges = async (config: SyncConfig, lastSyncedAt: number) => {
             .gt('updated_at', bufferedTimestamp);
             
         if (planError) throw planError;
+        
+        // 3. Fetch changed Categories
+        const { data: catRows, error: catError } = await supabase
+            .from('grid_categories')
+            .select('*')
+            .eq('sync_id', config.syncId)
+            .gt('updated_at', bufferedTimestamp);
+            
+        // If table doesn't exist yet, we might get an error. We can optionally ignore or log it.
+        // For now, throw to trigger fallback logging in catch block if it's a real issue.
+        if (catError && !catError.message.includes('does not exist')) throw catError;
 
-        // 3. Fetch Metadata (Cycle Start Day) - Only if changed
+        // 4. Fetch Metadata (Cycle Start Day) - Only if changed
         const { data: metaRow, error: metaError } = await supabase
             .from('grid_metadata')
             .select('*')
@@ -67,14 +75,14 @@ export const pullChanges = async (config: SyncConfig, lastSyncedAt: number) => {
         return {
             transactions: txRows as DBRow[],
             plans: planRows as DBRow[],
+            categories: (catRows || []) as DBRow[],
             metadata: metaRow as { cycle_start_day: number, updated_at: number } | null
         };
 
     } catch (e: any) {
         console.error("Sync Pull Error:", e.message);
-        // Fallback for user who hasn't run the SQL migration yet
         if (e.message?.includes('relation') && e.message?.includes('does not exist')) {
-            console.error("IMPORTANT: You must run the SQL migration script in Supabase to create 'grid_transactions' and 'grid_plans' tables.");
+            console.error("IMPORTANT: You must run the SQL migration script in Supabase to create 'grid_transactions', 'grid_plans', and 'grid_categories' tables.");
         }
         return null;
     }
@@ -87,6 +95,7 @@ export const pushChanges = async (
     config: SyncConfig, 
     transactions: Transaction[], 
     plans: RecurringPlan[], 
+    categoryDefs: CategoryDef[],
     deletedIds: { [id: string]: number },
     cycleStartDay: number,
     lastSyncedAt: number
@@ -94,7 +103,6 @@ export const pushChanges = async (
     if (!supabase || !config.syncId) return false;
 
     // Identify Changed Items (Created/Modified AFTER lastSyncedAt)
-    // We treat 'deletedIds' as changes too.
     
     // 1. Prepare Transactions
     const txUpserts = transactions
@@ -145,6 +153,20 @@ export const pushChanges = async (
         }
     });
 
+    // 3. Prepare Categories
+    const catUpserts = categoryDefs
+        .filter(c => (c.lastModified || 0) > lastSyncedAt)
+        .map(c => ({
+            sync_id: config.syncId,
+            id: c.id,
+            data: c,
+            updated_at: c.lastModified,
+            deleted: false
+        }));
+    
+    // Note: We don't currently strictly "delete" categories with tombstones in the UI, 
+    // but if we did, we'd handle it here.
+
     try {
         // Bulk Upsert Transactions
         if (txUpserts.length > 0) {
@@ -152,14 +174,20 @@ export const pushChanges = async (
             if (error) throw error;
         }
 
-        // Bulk Upsert Plans (Updates + Deletions)
+        // Bulk Upsert Plans
         const allPlanUpserts = [...planUpserts, ...planDeletes];
         if (allPlanUpserts.length > 0) {
             const { error } = await supabase.from('grid_plans').upsert(allPlanUpserts);
             if (error) throw error;
         }
 
-        // 3. Upsert Metadata (only if changed)
+        // Bulk Upsert Categories
+        if (catUpserts.length > 0) {
+            const { error } = await supabase.from('grid_categories').upsert(catUpserts);
+            if (error) throw error;
+        }
+
+        // 4. Upsert Metadata (only if changed)
         if (txUpserts.length > 0 || planUpserts.length > 0) {
              const { error } = await supabase.from('grid_metadata').upsert({
                 sync_id: config.syncId,
@@ -181,45 +209,40 @@ export const pushChanges = async (
  */
 export const mergeDeltas = (
     current: BackupData, 
-    remote: { transactions: DBRow[], plans: DBRow[], metadata: any }
+    remote: { transactions: DBRow[], plans: DBRow[], categories: DBRow[], metadata: any }
 ): BackupData => {
     const nextTx = [...current.transactions];
     const nextPlans = [...current.plans];
+    const nextCats = [...(current.categoryDefs || [])];
     const nextDeletedIds = { ...current.deletedIds };
     let nextCycleDay = current.cycleStartDay;
 
     // Helper: Merge list
-    const applyMerge = (list: any[], remoteRows: DBRow[], isPlan: boolean) => {
+    const applyMerge = (list: any[], remoteRows: DBRow[]) => {
         remoteRows.forEach(row => {
             const remoteTs = row.updated_at;
 
             // Handle Deletion
             if (row.deleted) {
-                // Add to local deletedIds
                 if (!nextDeletedIds[row.id] || remoteTs > nextDeletedIds[row.id]) {
                     nextDeletedIds[row.id] = remoteTs;
                 }
-                // Remove from array
                 const idx = list.findIndex(i => i.id === row.id);
                 if (idx !== -1) list.splice(idx, 1);
                 return;
             }
 
             // Handle Update/Create
-            // Check if it's already deleted locally with a newer timestamp
             if (nextDeletedIds[row.id] && nextDeletedIds[row.id] > remoteTs) {
-                return; // Local deletion is newer, ignore remote update
+                return; // Local deletion is newer
             }
 
             const idx = list.findIndex(i => i.id === row.id);
             if (idx === -1) {
-                // New Item
                 list.push(row.data);
             } else {
-                // Existing Item - LWW
                 const localItem = list[idx];
                 const localTs = localItem.lastModified || 0;
-                
                 if (remoteTs > localTs) {
                     list[idx] = row.data;
                 }
@@ -227,9 +250,9 @@ export const mergeDeltas = (
         });
     };
 
-    // Apply merges
-    if (remote.transactions) applyMerge(nextTx, remote.transactions, false);
-    if (remote.plans) applyMerge(nextPlans, remote.plans, true);
+    if (remote.transactions) applyMerge(nextTx, remote.transactions);
+    if (remote.plans) applyMerge(nextPlans, remote.plans);
+    if (remote.categories) applyMerge(nextCats, remote.categories);
 
     // Apply Metadata
     if (remote.metadata && remote.metadata.updated_at > (current.lastModified || 0)) {
@@ -243,7 +266,8 @@ export const mergeDeltas = (
         plans: nextPlans,
         cycleStartDay: nextCycleDay,
         deletedIds: nextDeletedIds,
-        lastModified: Date.now() // Update local global timestamp
+        categoryDefs: nextCats,
+        lastModified: Date.now()
     };
 };
 

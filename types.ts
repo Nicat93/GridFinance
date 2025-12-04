@@ -14,6 +14,7 @@ export interface CategoryDef {
   id: string;
   name: string;
   color: string; // e.g., 'red', 'blue', 'emerald'
+  lastModified?: number;
 }
 
 /**

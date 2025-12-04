@@ -86,14 +86,16 @@ export default function App() {
       const oldSavedCats = localStorage.getItem('savedCategories');
       const cats: CategoryDef[] = [];
       const colors = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
-      
+      const now = Date.now();
+
       if (oldSavedCats) {
           const names: string[] = JSON.parse(oldSavedCats);
           names.forEach(name => {
               cats.push({
                   id: Math.random().toString(36).substr(2, 9),
                   name: name,
-                  color: colors[Math.floor(Math.random() * colors.length)]
+                  color: colors[Math.floor(Math.random() * colors.length)],
+                  lastModified: now // Important for sync
               });
           });
       }
@@ -177,6 +179,7 @@ export default function App() {
         const newDefs = [...prev];
         let changed = false;
         const colors = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
+        const now = Date.now();
 
         usedCategories.forEach(catName => {
             const normalized = catName.trim();
@@ -187,7 +190,8 @@ export default function App() {
                 newDefs.push({
                     id: Math.random().toString(36).substr(2, 9),
                     name: normalized,
-                    color: colors[Math.floor(Math.random() * colors.length)]
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    lastModified: now // Set timestamp so it syncs up
                 });
                 changed = true;
             }
@@ -198,10 +202,10 @@ export default function App() {
   }, [transactions, plans]);
 
   // --- Sync Logic ---
-  const stateRef = useRef({ transactions, plans, cycleStartDay, deletedIds, syncConfig });
+  const stateRef = useRef({ transactions, plans, cycleStartDay, deletedIds, categoryDefs, syncConfig });
   useEffect(() => {
-      stateRef.current = { transactions, plans, cycleStartDay, deletedIds, syncConfig };
-  }, [transactions, plans, cycleStartDay, deletedIds, syncConfig]);
+      stateRef.current = { transactions, plans, cycleStartDay, deletedIds, categoryDefs, syncConfig };
+  }, [transactions, plans, cycleStartDay, deletedIds, categoryDefs, syncConfig]);
 
   const triggerSync = useCallback(async () => {
       const currentConfig = stateRef.current.syncConfig;
@@ -216,14 +220,14 @@ export default function App() {
       const syncStartTime = Date.now();
 
       try {
+          // 1. PULL
           const remoteChanges = await SupabaseService.pullChanges(currentConfig, lastSyncedAt);
+          
           let mergedTransactions = currentLocalState.transactions;
           let mergedPlans = currentLocalState.plans;
           let mergedDeletedIds = currentLocalState.deletedIds;
+          let mergedCategories = currentLocalState.categoryDefs;
           let mergedCycleDay = currentLocalState.cycleStartDay;
-          // Note: category sync handled inside pullChanges/pushChanges but we don't merge locally here for categories yet to keep it simple,
-          // assuming App restart fetches full categories or we add full merge logic later. 
-          // For now let's rely on the harvest effect and local storage.
 
           if (remoteChanges) {
               const merged = SupabaseService.mergeDeltas(
@@ -232,6 +236,7 @@ export default function App() {
                       plans: currentLocalState.plans, 
                       cycleStartDay: currentLocalState.cycleStartDay, 
                       deletedIds: currentLocalState.deletedIds,
+                      categoryDefs: currentLocalState.categoryDefs,
                       lastModified: 0 
                   }, 
                   remoteChanges
@@ -239,43 +244,36 @@ export default function App() {
               mergedTransactions = merged.transactions;
               mergedPlans = merged.plans;
               mergedDeletedIds = merged.deletedIds || {};
+              mergedCategories = merged.categoryDefs || [];
               mergedCycleDay = merged.cycleStartDay;
 
               const hasChanges = 
                   mergedTransactions.length !== currentLocalState.transactions.length ||
                   JSON.stringify(mergedTransactions) !== JSON.stringify(currentLocalState.transactions) ||
                   JSON.stringify(mergedPlans) !== JSON.stringify(currentLocalState.plans) ||
+                  JSON.stringify(mergedCategories) !== JSON.stringify(currentLocalState.categoryDefs) ||
                   mergedCycleDay !== currentLocalState.cycleStartDay;
 
               if (hasChanges) {
                   setTransactions(mergedTransactions);
                   setPlans(mergedPlans);
+                  setCategoryDefs(mergedCategories);
                   setCycleStartDay(mergedCycleDay);
                   setDeletedIds(mergedDeletedIds);
               }
           }
 
-          // Push Categories: Harvested list is authoritative for current session new items
-          // Ideally we should merge remote categories too.
-          // For now, let's just push what we have.
-          
+          // 2. PUSH
+          // Use merged data (or current if no merge) for push to ensure we are up to date
           const success = await SupabaseService.pushChanges(
               currentConfig, 
               mergedTransactions, 
               mergedPlans, 
+              mergedCategories,
               mergedDeletedIds, 
               mergedCycleDay, 
-              lastSyncedAt,
-              // Pass current categoryDefs (which are state, need to access latest)
-              // But we are in a callback with stale closure risk if we use categoryDefs directly?
-              // Let's use a ref or access it via the harvest effect cycle. 
-              // For simplicity, we skip pushing categories in this specific call block modification to avoid complexity,
-              // or we'd need to add categoryDefs to stateRef.
+              lastSyncedAt
           );
-
-          // NOTE: To properly sync categories, we need to update pushChanges signature in SupabaseService
-          // and pass the latest categoryDefs. 
-          // We will update stateRef to include categoryDefs.
           
           if (success) {
             setSyncStatus('synced');
@@ -290,13 +288,6 @@ export default function App() {
           isSyncingRef.current = false;
       }
   }, []); 
-
-  useEffect(() => {
-      // Update stateRef with categories too
-      // @ts-ignore
-      stateRef.current = { ...stateRef.current, categoryDefs };
-  }, [categoryDefs]);
-
 
   useEffect(() => {
       if (syncConfig.enabled && syncConfig.supabaseUrl && syncConfig.supabaseKey) {
@@ -404,7 +395,7 @@ export default function App() {
       const colors = ['red', 'blue', 'green', 'amber'];
       mockCats.forEach((name, i) => {
           if (!newCatDefs.find(c => c.name === name)) {
-              newCatDefs.push({ id: generateId(), name, color: colors[i] });
+              newCatDefs.push({ id: generateId(), name, color: colors[i], lastModified: now });
           }
       });
       setCategoryDefs(newCatDefs);
@@ -468,6 +459,7 @@ export default function App() {
         const data = JSON.parse(text);
         if (!Array.isArray(data.transactions) || !Array.isArray(data.plans)) { alert("Invalid backup file format."); return; }
         if (window.confirm(`Found ${data.transactions.length} transactions and ${data.plans.length} plans. This will OVERWRITE your current local data. Continue?`)) {
+            const now = Date.now();
             const importedTx = data.transactions.map((t: any) => {
                  const desc = t.name || t.description || 'Unknown';
                  const { name, ...rest } = t;
@@ -480,13 +472,15 @@ export default function App() {
             });
 
             if (data.categoryDefs && Array.isArray(data.categoryDefs)) {
-                setCategoryDefs(data.categoryDefs);
+                // Ensure imports have timestamps
+                const cats = data.categoryDefs.map((c: any) => ({ ...c, lastModified: c.lastModified || now }));
+                setCategoryDefs(cats);
             } else if (data.savedCategories) {
                 // Legacy Import Migration
                  const cats: CategoryDef[] = [];
                  const colors = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
                  data.savedCategories.forEach((name: string) => {
-                    cats.push({ id: generateId(), name: name, color: colors[Math.floor(Math.random() * colors.length)] });
+                    cats.push({ id: generateId(), name: name, color: colors[Math.floor(Math.random() * colors.length)], lastModified: now });
                  });
                  setCategoryDefs(cats);
             }
@@ -527,7 +521,8 @@ export default function App() {
         const newDef: CategoryDef = {
             id: generateId(),
             name: finalCategory,
-            color: colors[Math.floor(Math.random() * colors.length)]
+            color: colors[Math.floor(Math.random() * colors.length)],
+            lastModified: now
         };
         setCategoryDefs(prev => [...prev, newDef]);
     }
