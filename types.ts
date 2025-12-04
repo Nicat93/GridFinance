@@ -10,6 +10,8 @@ export enum Frequency {
 
 export type SortOption = 'date_desc' | 'date_asc' | 'description_asc' | 'amount_desc' | 'category';
 
+export type LanguageCode = 'en' | 'az' | 'ru' | 'tr';
+
 export interface CategoryDef {
   id: string;
   name: string;

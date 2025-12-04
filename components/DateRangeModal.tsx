@@ -37,8 +37,14 @@ const DateRangeModal: React.FC<Props> = ({ isOpen, startDate, endDate, onClose, 
   };
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl shadow-2xl w-full max-w-xs flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+    <div 
+        className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+    >
+      <div 
+        className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl shadow-2xl w-full max-w-xs flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
         
         <div className="p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 flex justify-between items-center">
             <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200">Filter Dates</h2>

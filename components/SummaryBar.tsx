@@ -1,15 +1,18 @@
 
 import React, { useRef } from 'react';
-import { FinancialSnapshot, SyncStatus } from '../types';
+import { FinancialSnapshot, SyncStatus, LanguageCode } from '../types';
+import { translations } from '../translations';
 
 interface Props {
   snapshot: FinancialSnapshot;
   onUpdateDate: (date: Date) => void;
   syncStatus: SyncStatus;
+  language: LanguageCode;
 }
 
-const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus }) => {
+const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus, language }) => {
   const dateInputRef = useRef<HTMLInputElement>(null);
+  const t = translations[language];
 
   const formatMoney = (n: number) => n.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
   const formatDate = (d: Date) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -58,7 +61,7 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus }) => 
         
         {/* Current */}
         <div className="flex flex-col shrink-0 min-w-0 max-w-[35%]">
-            <span className="text-[9px] sm:text-[10px] text-gray-500 dark:text-gray-500 uppercase tracking-widest font-bold truncate">Current</span>
+            <span className="text-[9px] sm:text-[10px] text-gray-500 dark:text-gray-500 uppercase tracking-widest font-bold truncate">{t.current}</span>
             <span className={`text-xs xs:text-[13px] sm:text-xl font-mono font-bold leading-none tracking-tighter truncate ${snapshot.currentBalance >= 0 ? 'text-gray-900 dark:text-gray-200' : 'text-rose-600 dark:text-rose-500'}`}>
                 {formatMoney(snapshot.currentBalance)}
             </span>
@@ -101,7 +104,7 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus }) => 
 
         {/* Projected */}
         <div className="flex flex-col items-end shrink-0 min-w-0 max-w-[35%]">
-            <span className="text-[9px] sm:text-[10px] text-indigo-500 dark:text-indigo-400 uppercase tracking-widest font-bold truncate">End Period</span>
+            <span className="text-[9px] sm:text-[10px] text-indigo-500 dark:text-indigo-400 uppercase tracking-widest font-bold truncate">{t.endPeriod}</span>
             <span className={`text-xs xs:text-[13px] sm:text-xl font-mono font-bold leading-none tracking-tighter truncate ${snapshot.projectedBalance >= 0 ? 'text-indigo-600 dark:text-indigo-300' : 'text-rose-500 dark:text-rose-400'}`}>
                 {formatMoney(snapshot.projectedBalance)}
             </span>
@@ -111,8 +114,8 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus }) => 
       
       {/* Mini Stats Line */}
       <div className="max-w-4xl mx-auto flex justify-between mt-1 sm:mt-2 pt-1 sm:pt-2 border-t border-gray-200 dark:border-gray-900 text-[9px] sm:text-xs font-mono text-gray-500 dark:text-gray-600">
-         <span>Inc: <span className="text-emerald-600 dark:text-emerald-500">+{formatMoney(snapshot.upcomingIncome)}</span></span>
-         <span>Exp: <span className="text-rose-600 dark:text-rose-500">-{formatMoney(snapshot.upcomingExpenses)}</span></span>
+         <span>{t.inc}: <span className="text-emerald-600 dark:text-emerald-500">+{formatMoney(snapshot.upcomingIncome)}</span></span>
+         <span>{t.exp}: <span className="text-rose-600 dark:text-rose-500">-{formatMoney(snapshot.upcomingExpenses)}</span></span>
       </div>
     </div>
   );

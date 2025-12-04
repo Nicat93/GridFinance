@@ -1,6 +1,7 @@
 
 import React from 'react';
-import { SortOption } from '../types';
+import { SortOption, LanguageCode } from '../types';
+import { translations } from '../translations';
 
 interface Props {
   filterText: string;
@@ -9,20 +10,24 @@ interface Props {
   onSortChange: (option: SortOption) => void;
   onOpenDateFilter: () => void;
   hasDateFilter: boolean;
+  language: LanguageCode;
 }
 
 const FilterBar: React.FC<Props> = ({ 
     filterText, onFilterChange, 
     sortOption, onSortChange,
-    onOpenDateFilter, hasDateFilter
+    onOpenDateFilter, hasDateFilter,
+    language
 }) => {
+  const t = translations[language];
+
   return (
     <div className="flex gap-2 mb-2 bg-gray-50 dark:bg-black sticky top-[80px] z-20 pt-2 pb-1 items-center transition-all">
         {/* Search */}
         <div className="relative flex-1 min-w-0">
             <input 
                 type="text" 
-                placeholder="Search..." 
+                placeholder={t.search}
                 value={filterText}
                 onChange={e => onFilterChange(e.target.value)}
                 className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded px-2 py-1.5 pl-7 text-[11px] text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 transition-colors h-[28px]"
@@ -65,11 +70,11 @@ const FilterBar: React.FC<Props> = ({
                 onChange={e => onSortChange(e.target.value as SortOption)}
                 className="appearance-none bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded pl-2 pr-6 py-1.5 text-[11px] text-gray-800 dark:text-gray-200 focus:outline-none cursor-pointer h-[28px] font-medium"
             >
-                <option value="date_desc">Newest</option>
-                <option value="date_asc">Next Due</option>
-                <option value="description_asc">A-Z</option>
-                <option value="amount_desc">Amount High</option>
-                <option value="category">Category</option>
+                <option value="date_desc">{t.sortNewest}</option>
+                <option value="date_asc">{t.sortNextDue}</option>
+                <option value="description_asc">{t.sortAZ}</option>
+                <option value="amount_desc">{t.sortAmountHigh}</option>
+                <option value="category">{t.sortCategory}</option>
             </select>
             <div className="absolute right-1.5 top-2 pointer-events-none text-gray-400">
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>

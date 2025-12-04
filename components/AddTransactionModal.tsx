@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Frequency, TransactionType, Transaction, RecurringPlan, CategoryDef } from '../types';
+import { Frequency, TransactionType, Transaction, RecurringPlan, CategoryDef, LanguageCode } from '../types';
 import CalculatorSheet from './CalculatorSheet';
+import { translations } from '../translations';
 
 interface Props {
   isOpen: boolean;
@@ -9,6 +10,7 @@ interface Props {
   onSave: (data: any) => void;
   initialData?: Transaction | RecurringPlan | null;
   categories: CategoryDef[];
+  language: LanguageCode;
 }
 
 const KNOWN_COLORS = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
@@ -23,7 +25,7 @@ const pickColorForString = (str: string): string => {
     return KNOWN_COLORS[index];
 };
 
-const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initialData, categories }) => {
+const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initialData, categories, language }) => {
   const [type, setType] = useState<TransactionType>('expense');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -34,6 +36,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   const [frequency, setFrequency] = useState<Frequency>(Frequency.MONTHLY);
   const [maxOccurrences, setMaxOccurrences] = useState('');
   const [isLoan, setIsLoan] = useState(false);
+  const [planStartDate, setPlanStartDate] = useState(''); // Separate start date for loan repayment plans
 
   // Calculator State
   const [calcTarget, setCalcTarget] = useState<'amount' | 'maxOccurrences' | null>(null);
@@ -41,6 +44,8 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   // Category Dropdown State
   const [isCatDropdownOpen, setIsCatDropdownOpen] = useState(false);
   const catInputRef = useRef<HTMLInputElement>(null);
+  
+  const t = translations[language];
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -65,6 +70,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
         if ('frequency' in initialData) {
             const plan = initialData as RecurringPlan;
             setDate(plan.startDate);
+            setPlanStartDate(plan.startDate);
             setIsRecurring(true);
             setFrequency(plan.frequency);
             setMaxOccurrences(plan.maxOccurrences ? plan.maxOccurrences.toString() : '');
@@ -72,6 +78,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
         } else {
             const tx = initialData as Transaction;
             setDate(tx.date);
+            setPlanStartDate(tx.date);
             setIsRecurring(false);
             setFrequency(Frequency.MONTHLY);
             setMaxOccurrences('');
@@ -82,7 +89,9 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
         setAmount('');
         setDescription('');
         setCategory('');
-        setDate(new Date().toISOString().split('T')[0]);
+        const today = new Date().toISOString().split('T')[0];
+        setDate(today);
+        setPlanStartDate(today);
         setIsRecurring(false);
         setFrequency(Frequency.MONTHLY);
         setMaxOccurrences('');
@@ -109,7 +118,8 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
             kind: 'plan',
             frequency,
             maxOccurrences: maxOccurrences ? Math.round(parseFloat(maxOccurrences)) : undefined,
-            isLoan: isLoan // Pass loan flag
+            isLoan: isLoan,
+            planStartDate: isLoan ? planStartDate : undefined // Pass the separate start date if loan
         });
     } else {
         onSave({ ...baseData, kind: 'single' });
@@ -178,14 +188,17 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
 
   return (
     <>
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-10 sm:pt-20 bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+        <div 
+            className="fixed inset-0 z-50 flex items-start justify-center pt-10 sm:pt-20 bg-black/60 backdrop-blur-sm p-4 overflow-y-auto"
+            onClick={onClose}
+        >
         <div 
             className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 w-full max-w-sm rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
-            onClick={() => setIsCatDropdownOpen(false)}
+            onClick={(e) => e.stopPropagation()}
         >
             <div className="p-4 border-b border-gray-100 dark:border-gray-900 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
                 <h2 className="text-gray-800 dark:text-gray-200 font-bold text-base uppercase tracking-wide">
-                    {initialData ? (isRecurring ? 'Edit Plan' : 'Edit Entry') : 'New Entry'}
+                    {initialData ? (isRecurring ? t.editPlan : t.editEntry) : t.newEntry}
                 </h2>
                 <button onClick={onClose} className="text-gray-400 hover:text-gray-800 dark:hover:text-white transition-colors">✕</button>
             </div>
@@ -207,7 +220,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                     onClick={() => setType('expense')}
                     className={`px-3 text-xs sm:text-sm font-bold rounded transition-colors flex items-center ${type === 'expense' ? 'bg-white dark:bg-rose-900 text-rose-600 dark:text-rose-200 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
                     >
-                    - Exp
+                    - {t.exp}
                     </button>
                     <div className="w-px bg-gray-300 dark:bg-gray-700 mx-1"></div>
                     <button 
@@ -215,7 +228,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                     onClick={() => setType('income')}
                     className={`px-3 text-xs sm:text-sm font-bold rounded transition-colors flex items-center ${type === 'income' ? 'bg-white dark:bg-emerald-900 text-emerald-600 dark:text-emerald-200 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
                     >
-                    + Inc
+                    + {t.inc}
                     </button>
                 </div>
             </div>
@@ -226,7 +239,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                     value={description}
                     onChange={e => setDescription(e.target.value)}
                     className="w-full bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-300 px-3 py-2 rounded text-base font-bold focus:border-indigo-500 focus:outline-none transition-colors"
-                    placeholder="Description (e.g. Walmart)"
+                    placeholder={t.descriptionPlaceholder}
                     autoComplete="off"
                 />
             </div>
@@ -241,7 +254,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                         onFocus={openCategoryDropdown}
                         onClick={(e) => { e.stopPropagation(); openCategoryDropdown(); }}
                         className="w-full bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-400 px-3 py-2 rounded text-sm focus:border-indigo-500 focus:outline-none transition-colors"
-                        placeholder="Category"
+                        placeholder={t.categoryPlaceholder}
                         autoComplete="off"
                     />
                     <div className="absolute right-2 top-2.5 pointer-events-none text-gray-400">
@@ -259,11 +272,11 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                                     }}
                                 >
                                     <div className={`w-3 h-3 rounded-full ${newCategoryStyle.className || ''}`} style={newCategoryStyle.style}></div>
-                                    <span className="text-sm text-gray-600 dark:text-gray-300">Create "<strong>{category}</strong>"</span>
+                                    <span className="text-sm text-gray-600 dark:text-gray-300">{t.create} "<strong>{category}</strong>"</span>
                                 </div>
                             )}
                             {filteredCategories.length === 0 && !category.trim() && (
-                                <div className="p-2 text-xs text-gray-400 italic text-center">Type to add new</div>
+                                <div className="p-2 text-xs text-gray-400 italic text-center">{t.typeToAdd}</div>
                             )}
                             
                             {filteredCategories.map(c => {
@@ -308,40 +321,16 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                             className="w-4 h-4 rounded border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 text-indigo-600 focus:ring-0 focus:ring-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                         <span className={`text-sm select-none ${!!initialData && !('frequency' in initialData) ? 'text-gray-400 dark:text-gray-600' : 'text-gray-600 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-gray-300'}`}>
-                            Planned / Recurring
+                            {t.plannedRecurring}
                         </span>
                     </label>
 
                     {isRecurring && (
                         <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded space-y-3 animate-in fade-in slide-in-from-top-2">
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-xs text-gray-500 dark:text-gray-600 uppercase mb-1">Frequency</label>
-                                    <select 
-                                        value={frequency}
-                                        onChange={(e) => handleFrequencyChange(e.target.value as Frequency)}
-                                        className="w-full bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-300 p-1.5 rounded text-sm focus:outline-none"
-                                    >
-                                        <option value={Frequency.ONE_TIME}>One-time</option>
-                                        <option value={Frequency.WEEKLY}>Weekly</option>
-                                        <option value={Frequency.MONTHLY}>Monthly</option>
-                                        <option value={Frequency.YEARLY}>Yearly</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs text-gray-500 dark:text-gray-600 uppercase mb-1">Total Payments</label>
-                                    <div 
-                                        onClick={() => frequency !== Frequency.ONE_TIME && setCalcTarget('maxOccurrences')}
-                                        className={`w-full bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-300 p-1.5 rounded text-sm font-mono truncate h-[34px] flex items-center ${frequency === Frequency.ONE_TIME ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900'}`}
-                                    >
-                                        {maxOccurrences ? maxOccurrences : <span className="text-gray-400">∞</span>}
-                                    </div>
-                                </div>
-                            </div>
-
+                            
                             {/* Loan Checkbox */}
                             {!initialData && (
-                                <div className="pt-2 border-t border-gray-200 dark:border-gray-800/50">
+                                <div className="pb-3 border-b border-gray-200 dark:border-gray-800/50">
                                     <label className="flex items-center gap-2 cursor-pointer group">
                                         <input 
                                             type="checkbox" 
@@ -355,21 +344,59 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                                         />
                                         <div className="flex flex-col">
                                             <span className="text-xs font-bold text-gray-600 dark:text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                                                Record as Loan / Installment
+                                                {t.loanInstallment}
                                             </span>
                                             <span className="text-[9px] text-gray-400 dark:text-gray-600">
-                                                Creates immediate {type === 'expense' ? 'income' : 'expense'} for total amount
+                                                {t.loanDesc}
                                             </span>
                                         </div>
                                     </label>
                                 </div>
                             )}
+
+                            {isLoan && (
+                                <div className="animate-in fade-in slide-in-from-top-1">
+                                    <label className="block text-xs text-gray-500 dark:text-gray-600 uppercase mb-1">{t.repaymentStart}</label>
+                                    <input 
+                                        type="date" 
+                                        required
+                                        value={planStartDate}
+                                        onChange={e => setPlanStartDate(e.target.value)}
+                                        className="w-full bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-300 p-1.5 rounded text-sm focus:outline-none"
+                                    />
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs text-gray-500 dark:text-gray-600 uppercase mb-1">{t.frequency}</label>
+                                    <select 
+                                        value={frequency}
+                                        onChange={(e) => handleFrequencyChange(e.target.value as Frequency)}
+                                        className="w-full bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-300 p-1.5 rounded text-sm focus:outline-none"
+                                    >
+                                        <option value={Frequency.ONE_TIME}>One-time</option>
+                                        <option value={Frequency.WEEKLY}>Weekly</option>
+                                        <option value={Frequency.MONTHLY}>Monthly</option>
+                                        <option value={Frequency.YEARLY}>Yearly</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-gray-500 dark:text-gray-600 uppercase mb-1">{t.totalPayments}</label>
+                                    <div 
+                                        onClick={() => frequency !== Frequency.ONE_TIME && setCalcTarget('maxOccurrences')}
+                                        className={`w-full bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-300 p-1.5 rounded text-sm font-mono truncate h-[34px] flex items-center ${frequency === Frequency.ONE_TIME ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900'}`}
+                                    >
+                                        {maxOccurrences ? maxOccurrences : <span className="text-gray-400">∞</span>}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
 
             <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-lg text-base shadow-lg transition-all mt-4">
-                {initialData ? 'Update' : (isRecurring ? 'Create Plan' : 'Add Transaction')}
+                {initialData ? t.update : (isRecurring ? t.createPlan : t.addTransaction)}
             </button>
             </form>
         </div>

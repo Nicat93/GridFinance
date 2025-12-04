@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus, TransactionType, SortOption, CategoryDef } from './types';
+import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus, TransactionType, SortOption, CategoryDef, LanguageCode } from './types';
 import TransactionGrid from './components/TransactionGrid';
 import SummaryBar from './components/SummaryBar';
 import AddTransactionModal from './components/AddTransactionModal';
@@ -14,6 +14,7 @@ import CategoryManager from './components/CategoryManager';
 import DateRangeModal from './components/DateRangeModal';
 import * as SupabaseService from './services/supabaseService';
 import { APP_VERSION } from './version';
+import { translations } from './translations';
 
 // --- Utility Functions ---
 
@@ -118,6 +119,12 @@ export default function App() {
       const saved = localStorage.getItem('theme');
       return saved ? saved === 'dark' : true;
   });
+  
+  const [language, setLanguage] = useState<LanguageCode>(() => {
+      const saved = localStorage.getItem('language');
+      return (saved as LanguageCode) || 'en';
+  });
+
   const [viewDate, setViewDate] = useState<Date>(() => new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -161,6 +168,7 @@ export default function App() {
   useEffect(() => { localStorage.setItem('categoryDefs', JSON.stringify(categoryDefs)); }, [categoryDefs]);
   useEffect(() => { localStorage.setItem('syncConfig', JSON.stringify(syncConfig)); }, [syncConfig]);
   useEffect(() => { localStorage.setItem('theme', isDarkMode ? 'dark' : 'light'); }, [isDarkMode]);
+  useEffect(() => { localStorage.setItem('language', language); }, [language]);
 
   // --- Effects: Theme ---
   useEffect(() => {
@@ -559,11 +567,14 @@ export default function App() {
             // If it's not a loan, the input amount is the Monthly amount.
             const finalPlanAmount = data.isLoan ? (data.amount / count) : data.amount;
 
+            // For loans, use the specified start date. For regular plans, use the transaction date.
+            const finalPlanStartDate = data.isLoan ? (data.planStartDate || data.date) : data.date;
+
             const newPlan: RecurringPlan = {
                 id: generateId(), description: finalDescription, 
                 amount: finalPlanAmount, 
                 type: data.type,
-                frequency: data.frequency, startDate: data.date, occurrencesGenerated: 0, category: finalCategory,
+                frequency: data.frequency, startDate: finalPlanStartDate, occurrencesGenerated: 0, category: finalCategory,
                 maxOccurrences: data.maxOccurrences, 
                 lastModified: now
             };
@@ -577,7 +588,7 @@ export default function App() {
                 
                 const principalTx: Transaction = {
                     id: generateId(),
-                    date: data.date,
+                    date: data.date, // Transaction happens "now"
                     description: `Loan Principal: ${finalDescription}`,
                     amount: totalAmount,
                     type: reverseType,
@@ -721,9 +732,12 @@ export default function App() {
   const handleConfirmShiftCycle = () => { if (shiftCycleDialog) { setCycleStartDay(shiftCycleDialog.newDate.getDate()); setViewDate(shiftCycleDialog.newDate); executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate); setShiftCycleDialog(null); } };
   const handleAlternativeKeepCycle = () => { if (shiftCycleDialog) { executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate); setShiftCycleDialog(null); } };
 
+  // Translations helper
+  const t = translations[language];
+
   return (
     <div className="min-h-screen pb-20 bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-300 font-sans transition-colors relative">
-      <SummaryBar snapshot={snapshot} onUpdateDate={handleUpdateBillingDate} syncStatus={syncStatus} />
+      <SummaryBar snapshot={snapshot} onUpdateDate={handleUpdateBillingDate} syncStatus={syncStatus} language={language} />
       
       <main className="max-w-4xl mx-auto px-4">
         <FilterBar 
@@ -731,13 +745,14 @@ export default function App() {
             sortOption={sortOption} onSortChange={setSortOption} 
             onOpenDateFilter={() => setIsDateFilterOpen(true)}
             hasDateFilter={!!(filterStartDate || filterEndDate)}
+            language={language}
         />
         
         {plans.length > 0 && (
             <div className="mb-4">
                 <div className="flex items-center gap-2 mb-1 cursor-pointer group select-none" onClick={() => setShowPlanned(!showPlanned)}>
                     <svg className="w-2.5 h-2.5 text-gray-500 dark:text-gray-600 transition-transform duration-200" style={{ transform: showPlanned ? 'rotate(90deg)' : 'rotate(0deg)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest group-hover:text-gray-800 dark:group-hover:text-gray-300 transition-colors">Planned</h3>
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest group-hover:text-gray-800 dark:group-hover:text-gray-300 transition-colors">{t.planned}</h3>
                 </div>
                 {showPlanned && <PlanList 
                     plans={plans} 
@@ -751,6 +766,7 @@ export default function App() {
                     categories={categoryDefs}
                     startDate={filterStartDate}
                     endDate={filterEndDate}
+                    language={language}
                 />}
             </div>
         )}
@@ -758,7 +774,7 @@ export default function App() {
         <div className="mb-6">
             <div className="flex items-center gap-2 mb-1 mt-4 cursor-pointer group select-none" onClick={() => setShowHistory(!showHistory)}>
                  <svg className="w-2.5 h-2.5 text-gray-500 dark:text-gray-600 transition-transform duration-200" style={{ transform: showHistory ? 'rotate(90deg)' : 'rotate(0deg)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
-                 <h1 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest group-hover:text-gray-800 dark:group-hover:text-gray-200 transition-colors">History</h1>
+                 <h1 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest group-hover:text-gray-800 dark:group-hover:text-gray-200 transition-colors">{t.history}</h1>
             </div>
             {showHistory && <TransactionGrid 
                 transactions={transactions} 
@@ -770,6 +786,7 @@ export default function App() {
                 categories={categoryDefs}
                 startDate={filterStartDate}
                 endDate={filterEndDate}
+                language={language}
             />}
         </div>
       </main>
@@ -781,7 +798,7 @@ export default function App() {
       <button 
           onClick={() => setIsSettingsOpen(true)}
           className="fixed bottom-6 left-6 w-10 h-10 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-105 active:scale-95 z-40 border border-gray-300 dark:border-gray-700"
-          title="Settings"
+          title={t.settings}
       >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
       </button>
@@ -796,7 +813,7 @@ export default function App() {
       <button 
           onClick={() => setIsModalOpen(true)}
           className="fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-2xl flex items-center justify-center text-3xl font-light transition-transform hover:scale-105 active:scale-95 z-40 border border-indigo-400/30"
-          title="Add Entry"
+          title={t.addTransaction}
       >
           +
       </button>
@@ -805,19 +822,21 @@ export default function App() {
           <DesignDebugger config={designConfig} onChange={setDesignConfig} onClose={() => setShowDesignDebug(false)} />
       )}
       <AddTransactionModal 
-        isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingItem(null); }} onSave={handleSaveData} initialData={editingItem} categories={categoryDefs}
+        isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingItem(null); }} onSave={handleSaveData} initialData={editingItem} categories={categoryDefs} language={language}
       />
       <SettingsModal 
         isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)}
         syncConfig={syncConfig} onSaveSyncConfig={handleSaveSyncConfig} onClearData={handleClearDataRequest} onExportData={handleExportData} onImportData={handleImportData} onAddMockData={handleAddMockData}
         showDesignDebug={showDesignDebug} onToggleDesignDebug={() => setShowDesignDebug(!showDesignDebug)}
         onOpenCategoryManager={() => setIsCategoryManagerOpen(true)}
+        language={language} onLanguageChange={setLanguage}
       />
       <CategoryManager 
         isOpen={isCategoryManagerOpen}
         onClose={() => setIsCategoryManagerOpen(false)}
         categories={categoryDefs}
         onSave={setCategoryDefs}
+        language={language}
       />
       <DateRangeModal 
         isOpen={isDateFilterOpen}
@@ -828,24 +847,26 @@ export default function App() {
             setFilterStartDate(start);
             setFilterEndDate(end);
         }}
+        language={language}
       />
       <ConfirmModal 
-        isOpen={!!shiftCycleDialog} title="Next Billing Cycle?" message={`This payment (${shiftCycleDialog?.newDate.toLocaleDateString()}) falls in the next billing cycle. Shift cycle start to ${shiftCycleDialog?.newDate.getDate()}th?`}
-        onConfirm={handleConfirmShiftCycle} confirmText="Yes, Shift Cycle" onAlternative={handleAlternativeKeepCycle} alternativeText="No, Keep Current" onCancel={() => setShiftCycleDialog(null)} cancelText="Cancel"
+        isOpen={!!shiftCycleDialog} title={t.confirmTitle} message={`This payment (${shiftCycleDialog?.newDate.toLocaleDateString()}) falls in the next billing cycle. Shift cycle start to ${shiftCycleDialog?.newDate.getDate()}th?`}
+        onConfirm={handleConfirmShiftCycle} confirmText="Yes, Shift Cycle" onAlternative={handleAlternativeKeepCycle} alternativeText="No, Keep Current" onCancel={() => setShiftCycleDialog(null)} cancelText={t.cancel}
       />
       <ConfirmModal
         isOpen={isClearDataConfirmOpen}
-        title="Clear Local Data"
+        title={t.clearData}
         message="Are you sure? This will delete all local transactions and plans. This cannot be undone."
         onConfirm={performClearData}
         onCancel={() => setIsClearDataConfirmOpen(false)}
-        confirmText="Delete Everything"
-        cancelText="Cancel"
+        confirmText={t.yes}
+        cancelText={t.cancel}
       />
       {transitionState && (
           <PeriodTransitionModal
             isOpen={transitionState.isOpen} targetDate={transitionState.targetDate} pendingPlans={transitionState.pendingItems}
             onResolve={handleResolveTransitionItem} onContinue={handleFinishTransition} onCancel={() => setTransitionState(null)}
+            language={language}
           />
       )}
     </div>

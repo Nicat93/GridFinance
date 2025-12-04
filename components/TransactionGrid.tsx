@@ -1,7 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
-import { Transaction, SortOption, CategoryDef } from '../types';
+import { Transaction, SortOption, CategoryDef, LanguageCode } from '../types';
 import { DesignConfig } from './DesignDebugger';
+import { translations } from '../translations';
 
 interface Props {
   transactions: Transaction[];
@@ -13,6 +14,7 @@ interface Props {
   categories: CategoryDef[];
   startDate?: string;
   endDate?: string;
+  language: LanguageCode;
 }
 
 const PAGE_SIZE = 50;
@@ -21,11 +23,12 @@ const KNOWN_COLORS = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime
 const TransactionGrid: React.FC<Props> = ({ 
     transactions, onDelete, onEdit, 
     filterText, sortOption, designConfig, categories,
-    startDate, endDate
+    startDate, endDate, language
 }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [renderLimit, setRenderLimit] = useState(PAGE_SIZE);
+  const t = translations[language];
   
   const filteredAndSorted = useMemo(() => {
     let result = [...transactions];
@@ -162,14 +165,14 @@ const TransactionGrid: React.FC<Props> = ({
             
             {/* --- Header --- */}
             <div className="flex justify-between bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400 font-mono uppercase tracking-wider text-[10px]">
-            <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium">Details</div>
-            <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium text-right">Amount</div>
+            <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium">{t.details}</div>
+            <div className="py-1 px-2 border-b border-gray-200 dark:border-gray-800 font-medium text-right">{t.amount}</div>
             </div>
 
             {/* --- Body --- */}
             <div className="divide-y divide-gray-100 dark:divide-gray-800 font-mono">
             {filteredAndSorted.length === 0 ? (
-                <div className="p-4 text-center text-gray-400 dark:text-gray-600 italic text-[10px]">No matches found.</div>
+                <div className="p-4 text-center text-gray-400 dark:text-gray-600 italic text-[10px]">{t.noMatches}</div>
             ) : (
                 <>
                     {visibleTransactions.map((tx) => {
@@ -236,14 +239,14 @@ const TransactionGrid: React.FC<Props> = ({
                                     <div className="flex gap-2 pt-1 border-t border-gray-200 dark:border-gray-800/50 mt-1 relative z-10">
                                         {isDeleting ? (
                                             <>
-                                                <div className="flex-1 flex items-center justify-center text-red-500 dark:text-red-400 font-bold uppercase tracking-wider text-[10px]">Sure?</div>
-                                                <button onClick={(e) => handleConfirmDelete(e, tx.id)} className="bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-200 px-4 py-1.5 rounded text-[10px] sm:text-xs">Yes</button>
-                                                <button onClick={handleCancelDelete} className="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-1.5 rounded text-[10px] sm:text-xs">No</button>
+                                                <div className="flex-1 flex items-center justify-center text-red-500 dark:text-red-400 font-bold uppercase tracking-wider text-[10px]">{t.sure}</div>
+                                                <button onClick={(e) => handleConfirmDelete(e, tx.id)} className="bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-200 px-4 py-1.5 rounded text-[10px] sm:text-xs">{t.yes}</button>
+                                                <button onClick={handleCancelDelete} className="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-1.5 rounded text-[10px] sm:text-xs">{t.no}</button>
                                             </>
                                         ) : (
                                             <>
-                                                <button onClick={(e) => handleEdit(e, tx)} className="flex-1 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-1.5 rounded text-[10px] sm:text-xs hover:bg-gray-300 dark:hover:bg-gray-700">Edit</button>
-                                                <button onClick={(e) => handleDeleteClick(e, tx.id)} className="flex-1 bg-gray-200 dark:bg-gray-800 text-red-600 dark:text-red-400 py-1.5 rounded text-[10px] sm:text-xs hover:bg-red-100 dark:hover:bg-red-900/30">Delete</button>
+                                                <button onClick={(e) => handleEdit(e, tx)} className="flex-1 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-1.5 rounded text-[10px] sm:text-xs hover:bg-gray-300 dark:hover:bg-gray-700">{t.edit}</button>
+                                                <button onClick={(e) => handleDeleteClick(e, tx.id)} className="flex-1 bg-gray-200 dark:bg-gray-800 text-red-600 dark:text-red-400 py-1.5 rounded text-[10px] sm:text-xs hover:bg-red-100 dark:hover:bg-red-900/30">{t.delete}</button>
                                             </>
                                         )}
                                     </div>
@@ -260,7 +263,7 @@ const TransactionGrid: React.FC<Props> = ({
                                 onClick={handleShowMore}
                                 className="text-[10px] uppercase font-bold tracking-widest text-gray-400 dark:text-gray-600 hover:text-indigo-600 dark:hover:text-indigo-400 py-2 px-4 transition-colors"
                             >
-                                Show Older Entries ({filteredAndSorted.length - visibleTransactions.length} more)
+                                {t.showOlder} ({filteredAndSorted.length - visibleTransactions.length} more)
                             </button>
                         </div>
                     )}
