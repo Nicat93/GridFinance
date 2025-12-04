@@ -141,7 +141,12 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
       if (calcTarget === 'amount') {
           setAmount(val);
       } else if (calcTarget === 'maxOccurrences') {
-          setMaxOccurrences(val);
+          // If value is 0 (or empty), treat as infinite
+          if (parseFloat(val) === 0 || val === '') {
+              setMaxOccurrences('');
+          } else {
+              setMaxOccurrences(val);
+          }
       }
   };
 
@@ -328,45 +333,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                     {isRecurring && (
                         <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded space-y-3 animate-in fade-in slide-in-from-top-2">
                             
-                            {/* Loan Checkbox */}
-                            {!initialData && (
-                                <div className="pb-3 border-b border-gray-200 dark:border-gray-800/50">
-                                    <label className="flex items-center gap-2 cursor-pointer group">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={isLoan} 
-                                            onChange={e => {
-                                                const checked = e.target.checked;
-                                                setIsLoan(checked);
-                                                if (checked && !maxOccurrences) setMaxOccurrences('1');
-                                            }}
-                                            className="w-4 h-4 rounded border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 text-indigo-600 focus:ring-0 focus:ring-offset-0"
-                                        />
-                                        <div className="flex flex-col">
-                                            <span className="text-xs font-bold text-gray-600 dark:text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                                                {t.loanInstallment}
-                                            </span>
-                                            <span className="text-[9px] text-gray-400 dark:text-gray-600">
-                                                {t.loanDesc}
-                                            </span>
-                                        </div>
-                                    </label>
-                                </div>
-                            )}
-
-                            {isLoan && (
-                                <div className="animate-in fade-in slide-in-from-top-1">
-                                    <label className="block text-xs text-gray-500 dark:text-gray-600 uppercase mb-1">{t.repaymentStart}</label>
-                                    <input 
-                                        type="date" 
-                                        required
-                                        value={planStartDate}
-                                        onChange={e => setPlanStartDate(e.target.value)}
-                                        className="w-full bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-300 p-1.5 rounded text-sm focus:outline-none"
-                                    />
-                                </div>
-                            )}
-
+                            {/* Frequency & Payments Row - Moved to Top */}
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <label className="block text-xs text-gray-500 dark:text-gray-600 uppercase mb-1">{t.frequency}</label>
@@ -391,6 +358,48 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Loan Checkbox Row - Moved Below Frequency */}
+                            {!initialData && (
+                                <div className="pt-3 border-t border-gray-200 dark:border-gray-800/50 flex items-center justify-between gap-2">
+                                    <label className="flex items-center gap-2 cursor-pointer group shrink-0">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={isLoan} 
+                                            onChange={e => {
+                                                const checked = e.target.checked;
+                                                setIsLoan(checked);
+                                                if (checked && !maxOccurrences) setMaxOccurrences('1');
+                                            }}
+                                            className="w-4 h-4 rounded border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 text-indigo-600 focus:ring-0 focus:ring-offset-0"
+                                        />
+                                        <div className="flex flex-col">
+                                            <span className="text-xs font-bold text-gray-600 dark:text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                                {t.loanInstallment}
+                                            </span>
+                                            {!isLoan && (
+                                                <span className="text-[9px] text-gray-400 dark:text-gray-600 hidden sm:inline">
+                                                    {t.loanDesc}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </label>
+
+                                    {isLoan && (
+                                        <div className="animate-in fade-in slide-in-from-right-2 flex-1 max-w-[50%]">
+                                            <label className="block text-[9px] text-gray-500 dark:text-gray-600 uppercase mb-0.5 text-right">{t.repaymentStart}</label>
+                                            <input 
+                                                type="date" 
+                                                required
+                                                value={planStartDate}
+                                                onChange={e => setPlanStartDate(e.target.value)}
+                                                className="w-full bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-300 p-1 rounded text-xs focus:outline-none"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                         </div>
                     )}
                 </div>
