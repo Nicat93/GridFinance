@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus, TransactionType } from './types';
+import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus, TransactionType, SortOption } from './types';
 import TransactionGrid from './components/TransactionGrid';
 import SummaryBar from './components/SummaryBar';
 import AddTransactionModal from './components/AddTransactionModal';
@@ -8,6 +7,7 @@ import PlanList from './components/PlanList';
 import ConfirmModal from './components/ConfirmModal';
 import SettingsModal from './components/SettingsModal';
 import PeriodTransitionModal from './components/PeriodTransitionModal';
+import FilterBar from './components/FilterBar';
 import * as SupabaseService from './services/supabaseService';
 import { APP_VERSION } from './version';
 
@@ -118,6 +118,10 @@ export default function App() {
   const [editingItem, setEditingItem] = useState<Transaction | RecurringPlan | null>(null);
   const [showPlanned, setShowPlanned] = useState(true);
   const [showHistory, setShowHistory] = useState(true);
+  
+  // Global Filter/Sort State
+  const [filterText, setFilterText] = useState('');
+  const [sortOption, setSortOption] = useState<SortOption>('date_asc'); // Default to Next Due / Oldest
   
   // Dialog state for "Apply Now" edge case where date falls in next cycle
   const [shiftCycleDialog, setShiftCycleDialog] = useState<{ isOpen: boolean, planId: string, newDate: Date } | null>(null);
@@ -692,7 +696,15 @@ export default function App() {
   return (
     <div className="min-h-screen pb-20 bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-300 font-sans transition-colors relative">
       <SummaryBar snapshot={snapshot} onUpdateDate={handleUpdateBillingDate} syncStatus={syncStatus} />
-      <main className="max-w-4xl mx-auto px-4 pt-4">
+      
+      <main className="max-w-4xl mx-auto px-4">
+        {/* Global Filter Bar */}
+        <FilterBar 
+            filterText={filterText} 
+            onFilterChange={setFilterText} 
+            sortOption={sortOption} 
+            onSortChange={setSortOption} 
+        />
         
         {/* Planned Section */}
         {plans.length > 0 && (
@@ -701,7 +713,15 @@ export default function App() {
                     <svg className="w-2.5 h-2.5 text-gray-500 dark:text-gray-600 transition-transform duration-200" style={{ transform: showPlanned ? 'rotate(90deg)' : 'rotate(0deg)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
                     <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest group-hover:text-gray-800 dark:group-hover:text-gray-300 transition-colors">Planned</h3>
                 </div>
-                {showPlanned && <PlanList plans={plans} onDelete={deletePlan} onEdit={(p) => { setEditingItem(p); setIsModalOpen(true); }} onApplyNow={handleApplyPlanNow} currentPeriodEnd={snapshot.periodEnd} />}
+                {showPlanned && <PlanList 
+                    plans={plans} 
+                    onDelete={deletePlan} 
+                    onEdit={(p) => { setEditingItem(p); setIsModalOpen(true); }} 
+                    onApplyNow={handleApplyPlanNow} 
+                    currentPeriodEnd={snapshot.periodEnd} 
+                    filterText={filterText}
+                    sortOption={sortOption}
+                />}
             </div>
         )}
 
@@ -711,7 +731,13 @@ export default function App() {
                  <svg className="w-2.5 h-2.5 text-gray-500 dark:text-gray-600 transition-transform duration-200" style={{ transform: showHistory ? 'rotate(90deg)' : 'rotate(0deg)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
                  <h1 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest group-hover:text-gray-800 dark:group-hover:text-gray-200 transition-colors">History</h1>
             </div>
-            {showHistory && <TransactionGrid transactions={transactions} onDelete={deleteTransaction} onEdit={(t) => { setEditingItem(t); setIsModalOpen(true); }} />}
+            {showHistory && <TransactionGrid 
+                transactions={transactions} 
+                onDelete={deleteTransaction} 
+                onEdit={(t) => { setEditingItem(t); setIsModalOpen(true); }} 
+                filterText={filterText}
+                sortOption={sortOption}
+            />}
         </div>
       </main>
 

@@ -8,6 +8,8 @@ export enum Frequency {
   YEARLY = 'Yearly'
 }
 
+export type SortOption = 'date_desc' | 'date_asc' | 'description_asc' | 'amount_desc' | 'category';
+
 /**
  * Represents a single financial transaction (income or expense).
  */

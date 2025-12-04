@@ -1,26 +1,22 @@
 
 import React, { useState, useMemo } from 'react';
-import { Transaction } from '../types';
+import { Transaction, SortOption } from '../types';
 
 interface Props {
   transactions: Transaction[];
   onDelete: (id: string) => void;
   onEdit: (transaction: Transaction) => void;
+  filterText: string;
+  sortOption: SortOption;
 }
 
 const PAGE_SIZE = 50;
 
-type SortOption = 'date_desc' | 'date_asc' | 'description_asc' | 'amount_desc' | 'category';
-
-const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) => {
+const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit, filterText, sortOption }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [renderLimit, setRenderLimit] = useState(PAGE_SIZE);
   
-  // Filter & Sort State
-  const [filterText, setFilterText] = useState('');
-  const [sortOption, setSortOption] = useState<SortOption>('date_desc');
-
   const filteredAndSorted = useMemo(() => {
     let result = [...transactions];
 
@@ -79,28 +75,6 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
 
   return (
     <div className="w-full">
-      {/* Filter Bar */}
-      <div className="mb-2 flex gap-2">
-          <input 
-              type="text" 
-              placeholder="Filter Description/Category..." 
-              value={filterText}
-              onChange={e => setFilterText(e.target.value)}
-              className="flex-1 min-w-0 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded px-3 py-1.5 text-xs text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-          />
-          <select 
-              value={sortOption}
-              onChange={e => setSortOption(e.target.value as SortOption)}
-              className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded px-2 py-1.5 text-xs text-gray-800 dark:text-gray-200 focus:outline-none"
-          >
-              <option value="date_desc">Newest</option>
-              <option value="date_asc">Oldest</option>
-              <option value="description_asc">Desc A-Z</option>
-              <option value="amount_desc">Amount High</option>
-              <option value="category">Category</option>
-          </select>
-      </div>
-
       <div className="border border-gray-200 dark:border-gray-800 rounded-sm w-full bg-white dark:bg-gray-950 transition-colors">
         <div className="w-full text-left text-xs border-collapse">
             
@@ -123,14 +97,14 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
                     return (
                         <div key={tx.id} className="group flex flex-col hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
                             
-                            {/* Main Row */}
+                            {/* Main Row - Compact (py-0.5) with Larger Text */}
                             <div 
-                                className={`flex items-center cursor-pointer py-2 ${isExpanded ? 'bg-gray-50 dark:bg-gray-900/40 items-start' : ''}`} 
+                                className={`flex items-center cursor-pointer ${isExpanded ? 'bg-gray-50 dark:bg-gray-900/40 items-start' : ''} py-0.5`} 
                                 onClick={() => toggleRow(tx.id)}
                             >
                                 {/* Left: Description */}
                                 <div className="px-2 flex-1 min-w-0">
-                                    <div className={`text-gray-700 dark:text-gray-200 font-medium text-xs sm:text-sm transition-all ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}>
+                                    <div className={`text-gray-700 dark:text-gray-200 font-medium text-[13px] sm:text-sm leading-tight transition-all ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}>
                                         {tx.description}
                                     </div>
                                 </div>
@@ -138,17 +112,17 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
                                 {/* Right: Category, Date, Amount (Single Line) */}
                                 <div className="px-2 shrink-0 flex items-center justify-end gap-1.5 sm:gap-2 text-right">
                                     {/* Category Pill */}
-                                    <span className={`text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 ${isExpanded ? '' : 'truncate max-w-[60px]'}`}>
+                                    <span className={`text-[10px] px-1.5 py-0 rounded bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 h-4 flex items-center ${isExpanded ? '' : 'truncate max-w-[60px]'}`}>
                                         {tx.category}
                                     </span>
                                     
                                     {/* Date Pill */}
-                                    <span className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                    <span className="text-[10px] px-1.5 py-0 rounded bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 whitespace-nowrap h-4 flex items-center">
                                         {formatShortDate(tx.date)}
                                     </span>
                                     
-                                    {/* Amount */}
-                                    <span className={`text-[11px] sm:text-sm tracking-tighter font-bold whitespace-nowrap min-w-[50px] ${tx.type === 'expense' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'}`}>
+                                    {/* Amount - Larger (text-xs) */}
+                                    <span className={`text-xs sm:text-sm tracking-tighter font-bold whitespace-nowrap min-w-[45px] ${tx.type === 'expense' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'}`}>
                                         {tx.type === 'expense' ? '-' : '+'}{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </span>
                                 </div>
@@ -165,13 +139,13 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit }) =>
                                         {isDeleting ? (
                                             <>
                                                 <div className="flex-1 flex items-center justify-center text-red-500 dark:text-red-400 font-bold uppercase tracking-wider text-[10px]">Sure?</div>
-                                                <button onClick={(e) => handleConfirmDelete(e, tx.id)} className="bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-200 px-4 py-1.5 rounded text-xs">Yes</button>
-                                                <button onClick={handleCancelDelete} className="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-1.5 rounded text-xs">No</button>
+                                                <button onClick={(e) => handleConfirmDelete(e, tx.id)} className="bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-200 px-4 py-1.5 rounded text-[10px] sm:text-xs">Yes</button>
+                                                <button onClick={handleCancelDelete} className="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-1.5 rounded text-[10px] sm:text-xs">No</button>
                                             </>
                                         ) : (
                                             <>
-                                                <button onClick={(e) => handleEdit(e, tx)} className="flex-1 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-1.5 rounded text-xs hover:bg-gray-300 dark:hover:bg-gray-700">Edit</button>
-                                                <button onClick={(e) => handleDeleteClick(e, tx.id)} className="flex-1 bg-gray-200 dark:bg-gray-800 text-red-600 dark:text-red-400 py-1.5 rounded text-xs hover:bg-red-100 dark:hover:bg-red-900/30">Delete</button>
+                                                <button onClick={(e) => handleEdit(e, tx)} className="flex-1 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-1.5 rounded text-[10px] sm:text-xs hover:bg-gray-300 dark:hover:bg-gray-700">Edit</button>
+                                                <button onClick={(e) => handleDeleteClick(e, tx.id)} className="flex-1 bg-gray-200 dark:bg-gray-800 text-red-600 dark:text-red-400 py-1.5 rounded text-[10px] sm:text-xs hover:bg-red-100 dark:hover:bg-red-900/30">Delete</button>
                                             </>
                                         )}
                                     </div>

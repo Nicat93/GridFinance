@@ -59,7 +59,7 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus }) => 
         {/* Current */}
         <div className="flex flex-col shrink-0 min-w-0 max-w-[35%]">
             <span className="text-[9px] sm:text-[10px] text-gray-500 dark:text-gray-500 uppercase tracking-widest font-bold truncate">Current</span>
-            <span className={`text-[13px] sm:text-xl font-mono font-bold leading-none tracking-tighter truncate ${snapshot.currentBalance >= 0 ? 'text-gray-900 dark:text-gray-200' : 'text-rose-600 dark:text-rose-500'}`}>
+            <span className={`text-xs xs:text-[13px] sm:text-xl font-mono font-bold leading-none tracking-tighter truncate ${snapshot.currentBalance >= 0 ? 'text-gray-900 dark:text-gray-200' : 'text-rose-600 dark:text-rose-500'}`}>
                 {formatMoney(snapshot.currentBalance)}
             </span>
         </div>
@@ -102,7 +102,7 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus }) => 
         {/* Projected */}
         <div className="flex flex-col items-end shrink-0 min-w-0 max-w-[35%]">
             <span className="text-[9px] sm:text-[10px] text-indigo-500 dark:text-indigo-400 uppercase tracking-widest font-bold truncate">End Period</span>
-            <span className={`text-[13px] sm:text-xl font-mono font-bold leading-none tracking-tighter truncate ${snapshot.projectedBalance >= 0 ? 'text-indigo-600 dark:text-indigo-300' : 'text-rose-500 dark:text-rose-400'}`}>
+            <span className={`text-xs xs:text-[13px] sm:text-xl font-mono font-bold leading-none tracking-tighter truncate ${snapshot.projectedBalance >= 0 ? 'text-indigo-600 dark:text-indigo-300' : 'text-rose-500 dark:text-rose-400'}`}>
                 {formatMoney(snapshot.projectedBalance)}
             </span>
         </div>
