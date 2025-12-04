@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { RecurringPlan, Frequency, SortOption } from '../types';
+import { DesignConfig } from './DesignDebugger';
 
 interface Props {
   plans: RecurringPlan[];
@@ -10,6 +11,7 @@ interface Props {
   currentPeriodEnd: Date;
   filterText: string;
   sortOption: SortOption;
+  designConfig?: DesignConfig;
 }
 
 const PAGE_SIZE = 50;
@@ -32,7 +34,7 @@ const addTimeLocal = (date: string | Date, freq: Frequency, count: number): Date
 };
 
 // --- Component ---
-const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, currentPeriodEnd, filterText, sortOption }) => {
+const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, currentPeriodEnd, filterText, sortOption, designConfig }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [renderLimit, setRenderLimit] = useState(PAGE_SIZE);
@@ -109,6 +111,16 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
       return `${date.getMonth() + 1}-${date.getDate()}`;
   };
 
+  // Dynamic Styles from Design Config
+  const rowStyle = designConfig ? {
+      paddingTop: `${designConfig.paddingY}rem`,
+      paddingBottom: `${designConfig.paddingY}rem`,
+  } : {};
+  
+  const descStyle = designConfig ? { fontSize: `${designConfig.fontSize}px` } : {};
+  const amountStyle = designConfig ? { fontSize: `${Math.max(10, designConfig.fontSize - 1)}px` } : {};
+  const pillStyle = designConfig ? { fontSize: `${Math.max(9, designConfig.fontSize - 2)}px` } : {};
+
   return (
     <div className="w-full">
       <div className="border border-gray-200 dark:border-gray-800 rounded-sm w-full bg-white dark:bg-gray-950 transition-colors">
@@ -152,9 +164,10 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
                         return (
                             <div key={plan.id} className="group flex flex-col hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
                                 
-                                {/* Main Row - Compact (py-0.5) with Larger Text */}
+                                {/* Main Row - Styled via Design Config */}
                                 <div 
-                                    className={`flex items-center cursor-pointer ${isExpanded ? 'bg-gray-50 dark:bg-gray-900/40 items-start' : ''} py-0.5`} 
+                                    className={`flex items-center cursor-pointer ${isExpanded ? 'bg-gray-50 dark:bg-gray-900/40 items-start' : ''}`}
+                                    style={rowStyle}
                                     onClick={() => toggleRow(plan.id)}
                                 >
                                     {/* Left: Indicator & Description */}
@@ -163,7 +176,10 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
                                         <div className={`w-1 h-3 rounded-full shrink-0 mt-0.5 transition-colors ${showMark ? markColor : 'bg-transparent'}`}></div>
                                         
                                         <div className="flex-1 min-w-0">
-                                            <div className={`text-gray-700 dark:text-gray-200 font-medium text-[13px] sm:text-sm leading-tight transition-all ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}>
+                                            <div 
+                                                className={`text-gray-700 dark:text-gray-200 font-medium leading-tight transition-all ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}
+                                                style={descStyle}
+                                            >
                                                 {plan.description}
                                             </div>
                                         </div>
@@ -172,23 +188,32 @@ const PlanList: React.FC<Props> = ({ plans, onDelete, onApplyNow, onEdit, curren
                                     {/* Right: Category, Date, Amount (Single Line) */}
                                     <div className="px-2 shrink-0 flex items-center justify-end gap-1.5 sm:gap-2 text-right">
                                         {/* Category Pill */}
-                                        <span className={`text-[10px] px-1.5 py-0 rounded bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 h-4 flex items-center ${isExpanded ? '' : 'truncate max-w-[60px]'}`}>
+                                        <span 
+                                            className={`px-1.5 py-0 rounded bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 h-4 flex items-center ${isExpanded ? '' : 'truncate max-w-[60px]'}`}
+                                            style={pillStyle}
+                                        >
                                             {plan.category}
                                         </span>
 
                                         {/* Date Pill */}
-                                        <span className={`text-[10px] px-1.5 py-0 rounded border whitespace-nowrap h-4 flex items-center ${
+                                        <span 
+                                            className={`px-1.5 py-0 rounded border whitespace-nowrap h-4 flex items-center ${
                                             isLate && !isMaxed
                                             ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-900/40 text-rose-600 dark:text-rose-500 font-bold'
                                             : (!isFuture && !isMaxed) 
                                             ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-900/40 text-amber-600 dark:text-amber-500 font-bold' 
                                             : 'bg-gray-100 dark:bg-gray-800/60 border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400'
-                                        }`}>
+                                        }`}
+                                            style={pillStyle}
+                                        >
                                             {isMaxed ? 'Done' : formatShortDate(nextDate)}
                                         </span>
                                         
-                                        {/* Amount - Larger (text-xs) */}
-                                        <span className={`text-xs sm:text-sm tracking-tighter font-bold whitespace-nowrap min-w-[45px] ${plan.type === 'income' ? 'text-emerald-500 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                                        {/* Amount */}
+                                        <span 
+                                            className={`tracking-tighter font-bold whitespace-nowrap min-w-[45px] ${plan.type === 'income' ? 'text-emerald-500 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
+                                            style={amountStyle}
+                                        >
                                             {plan.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </span>
                                     </div>

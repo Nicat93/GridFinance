@@ -13,11 +13,13 @@ interface Props {
   onExportData: () => void;
   onImportData: (file: File) => void;
   onAddMockData: () => void;
+  showDesignDebug?: boolean;
+  onToggleDesignDebug?: () => void;
 }
 
 const SettingsModal: React.FC<Props> = ({ 
     isOpen, onClose, isDarkMode, onToggleTheme, syncConfig, onSaveSyncConfig, onClearData,
-    onExportData, onImportData, onAddMockData
+    onExportData, onImportData, onAddMockData, showDesignDebug, onToggleDesignDebug
 }) => {
   const [syncId, setSyncId] = useState(syncConfig.syncId || '');
   const [enabled, setEnabled] = useState(syncConfig.enabled);
@@ -165,6 +167,15 @@ const SettingsModal: React.FC<Props> = ({
 
             {/* Debug & Danger Zone */}
             <div className="pt-4 border-t border-gray-200 dark:border-gray-800 space-y-3">
+                {onToggleDesignDebug && (
+                    <button
+                        onClick={onToggleDesignDebug}
+                        className="w-full border border-indigo-200 dark:border-indigo-900/50 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/10 py-2 rounded text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
+                    >
+                        {showDesignDebug ? 'Hide Design Debugger' : 'Show Design Debugger'}
+                    </button>
+                )}
+
                 <button
                     onClick={onAddMockData}
                     className="w-full border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/10 py-2 rounded text-xs font-bold hover:bg-gray-100 dark:hover:bg-gray-900/30 transition-colors"

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus, TransactionType, SortOption } from './types';
 import TransactionGrid from './components/TransactionGrid';
@@ -8,6 +9,7 @@ import ConfirmModal from './components/ConfirmModal';
 import SettingsModal from './components/SettingsModal';
 import PeriodTransitionModal from './components/PeriodTransitionModal';
 import FilterBar from './components/FilterBar';
+import DesignDebugger, { DesignConfig } from './components/DesignDebugger';
 import * as SupabaseService from './services/supabaseService';
 import { APP_VERSION } from './version';
 
@@ -121,8 +123,13 @@ export default function App() {
   
   // Global Filter/Sort State
   const [filterText, setFilterText] = useState('');
-  const [sortOption, setSortOption] = useState<SortOption>('date_asc'); // Default to Next Due / Oldest
+  const [sortOption, setSortOption] = useState<SortOption>('date_asc'); 
   
+  // Design Debugger State
+  const [showDesignDebug, setShowDesignDebug] = useState(false);
+  // Default: 11px font, increased padding (0.35rem) to compensate height
+  const [designConfig, setDesignConfig] = useState<DesignConfig>({ fontSize: 11, paddingY: 0.35 });
+
   // Dialog state for "Apply Now" edge case where date falls in next cycle
   const [shiftCycleDialog, setShiftCycleDialog] = useState<{ isOpen: boolean, planId: string, newDate: Date } | null>(null);
 
@@ -165,7 +172,6 @@ export default function App() {
   // --- Sync Logic ---
 
   // Ref to hold current state for async operations to avoid stale closures
-  // Including syncConfig allows us to read the latest config without adding it to dependency array
   const stateRef = useRef({ transactions, plans, cycleStartDay, deletedIds, syncConfig });
   useEffect(() => {
       stateRef.current = { transactions, plans, cycleStartDay, deletedIds, syncConfig };
@@ -267,8 +273,6 @@ export default function App() {
       } else {
           setSyncStatus('offline');
       }
-      // Only re-run if enable status, keys, or syncId changes. 
-      // Do NOT include syncConfig.lastSyncedAt to avoid infinite loops.
   }, [syncConfig.enabled, syncConfig.supabaseUrl, syncConfig.supabaseKey, syncConfig.syncId, triggerSync]);
 
   // Auto Sync on Data Change (Debounced)
@@ -721,6 +725,7 @@ export default function App() {
                     currentPeriodEnd={snapshot.periodEnd} 
                     filterText={filterText}
                     sortOption={sortOption}
+                    designConfig={designConfig}
                 />}
             </div>
         )}
@@ -737,6 +742,7 @@ export default function App() {
                 onEdit={(t) => { setEditingItem(t); setIsModalOpen(true); }} 
                 filterText={filterText}
                 sortOption={sortOption}
+                designConfig={designConfig}
             />}
         </div>
       </main>
@@ -782,6 +788,15 @@ export default function App() {
           +
       </button>
 
+      {/* Floating Design Debugger */}
+      {showDesignDebug && (
+          <DesignDebugger 
+            config={designConfig}
+            onChange={setDesignConfig}
+            onClose={() => setShowDesignDebug(false)}
+          />
+      )}
+
       {/* Modals */}
       <AddTransactionModal 
         isOpen={isModalOpen} 
@@ -801,6 +816,8 @@ export default function App() {
         onExportData={handleExportData}
         onImportData={handleImportData}
         onAddMockData={handleAddMockData}
+        showDesignDebug={showDesignDebug}
+        onToggleDesignDebug={() => setShowDesignDebug(!showDesignDebug)}
       />
       <ConfirmModal 
         isOpen={!!shiftCycleDialog} title="Next Billing Cycle?" message={`This payment (${shiftCycleDialog?.newDate.toLocaleDateString()}) falls in the next billing cycle. Shift cycle start to ${shiftCycleDialog?.newDate.getDate()}th?`}

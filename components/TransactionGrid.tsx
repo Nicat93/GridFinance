@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Transaction, SortOption } from '../types';
+import { DesignConfig } from './DesignDebugger';
 
 interface Props {
   transactions: Transaction[];
@@ -8,11 +9,12 @@ interface Props {
   onEdit: (transaction: Transaction) => void;
   filterText: string;
   sortOption: SortOption;
+  designConfig?: DesignConfig;
 }
 
 const PAGE_SIZE = 50;
 
-const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit, filterText, sortOption }) => {
+const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit, filterText, sortOption, designConfig }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [renderLimit, setRenderLimit] = useState(PAGE_SIZE);
@@ -73,6 +75,18 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit, filt
   const toggleRow = (id: string) => { setExpandedId(prev => prev === id ? null : id); setConfirmDeleteId(null); };
   const handleShowMore = () => setRenderLimit(prev => prev + PAGE_SIZE);
 
+  // Dynamic Styles from Design Config
+  const rowStyle = designConfig ? {
+      paddingTop: `${designConfig.paddingY}rem`,
+      paddingBottom: `${designConfig.paddingY}rem`,
+  } : {};
+  
+  const descStyle = designConfig ? { fontSize: `${designConfig.fontSize}px` } : {};
+  // Scale amount and pills relative to base font size
+  const amountStyle = designConfig ? { fontSize: `${Math.max(10, designConfig.fontSize - 1)}px` } : {};
+  const pillStyle = designConfig ? { fontSize: `${Math.max(9, designConfig.fontSize - 2)}px` } : {};
+
+
   return (
     <div className="w-full">
       <div className="border border-gray-200 dark:border-gray-800 rounded-sm w-full bg-white dark:bg-gray-950 transition-colors">
@@ -97,14 +111,18 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit, filt
                     return (
                         <div key={tx.id} className="group flex flex-col hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
                             
-                            {/* Main Row - Compact (py-0.5) with Larger Text */}
+                            {/* Main Row - Styled via Design Config */}
                             <div 
-                                className={`flex items-center cursor-pointer ${isExpanded ? 'bg-gray-50 dark:bg-gray-900/40 items-start' : ''} py-0.5`} 
+                                className={`flex items-center cursor-pointer ${isExpanded ? 'bg-gray-50 dark:bg-gray-900/40 items-start' : ''}`} 
+                                style={rowStyle}
                                 onClick={() => toggleRow(tx.id)}
                             >
                                 {/* Left: Description */}
                                 <div className="px-2 flex-1 min-w-0">
-                                    <div className={`text-gray-700 dark:text-gray-200 font-medium text-[13px] sm:text-sm leading-tight transition-all ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}>
+                                    <div 
+                                        className={`text-gray-700 dark:text-gray-200 font-medium leading-tight transition-all ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}
+                                        style={descStyle}
+                                    >
                                         {tx.description}
                                     </div>
                                 </div>
@@ -112,17 +130,26 @@ const TransactionGrid: React.FC<Props> = ({ transactions, onDelete, onEdit, filt
                                 {/* Right: Category, Date, Amount (Single Line) */}
                                 <div className="px-2 shrink-0 flex items-center justify-end gap-1.5 sm:gap-2 text-right">
                                     {/* Category Pill */}
-                                    <span className={`text-[10px] px-1.5 py-0 rounded bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 h-4 flex items-center ${isExpanded ? '' : 'truncate max-w-[60px]'}`}>
+                                    <span 
+                                        className={`px-1.5 py-0 rounded bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 h-4 flex items-center ${isExpanded ? '' : 'truncate max-w-[60px]'}`}
+                                        style={pillStyle}
+                                    >
                                         {tx.category}
                                     </span>
                                     
                                     {/* Date Pill */}
-                                    <span className="text-[10px] px-1.5 py-0 rounded bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 whitespace-nowrap h-4 flex items-center">
+                                    <span 
+                                        className="px-1.5 py-0 rounded bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 whitespace-nowrap h-4 flex items-center"
+                                        style={pillStyle}
+                                    >
                                         {formatShortDate(tx.date)}
                                     </span>
                                     
-                                    {/* Amount - Larger (text-xs) */}
-                                    <span className={`text-xs sm:text-sm tracking-tighter font-bold whitespace-nowrap min-w-[45px] ${tx.type === 'expense' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'}`}>
+                                    {/* Amount */}
+                                    <span 
+                                        className={`tracking-tighter font-bold whitespace-nowrap min-w-[45px] ${tx.type === 'expense' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'}`}
+                                        style={amountStyle}
+                                    >
                                         {tx.type === 'expense' ? '-' : '+'}{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </span>
                                 </div>
