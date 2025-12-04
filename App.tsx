@@ -52,7 +52,7 @@ export default function App() {
     const saved = localStorage.getItem('transactions');
     let parsed: any[] = saved ? JSON.parse(saved) : [];
     return parsed.map((t: any) => {
-        const desc = t.name || t.description || 'Unknown';
+        const desc = t.name || t.description || '';
         const { name, ...rest } = t;
         return { ...rest, description: desc };
     });
@@ -62,7 +62,7 @@ export default function App() {
     const saved = localStorage.getItem('plans');
     let parsed: any[] = saved ? JSON.parse(saved) : [];
     return parsed.map((p: any) => {
-        const desc = p.name || p.description || 'Unknown';
+        const desc = p.name || p.description || '';
         const { name, ...rest } = p;
         return { ...rest, description: desc };
     });
@@ -199,7 +199,7 @@ export default function App() {
                     id: Math.random().toString(36).substr(2, 9),
                     name: normalized,
                     color: colors[Math.floor(Math.random() * colors.length)],
-                    lastModified: now // Set timestamp so it syncs up
+                    lastModified: now // Important for sync
                 });
                 changed = true;
             }
@@ -469,12 +469,12 @@ export default function App() {
         if (window.confirm(`Found ${data.transactions.length} transactions and ${data.plans.length} plans. This will OVERWRITE your current local data. Continue?`)) {
             const now = Date.now();
             const importedTx = data.transactions.map((t: any) => {
-                 const desc = t.name || t.description || 'Unknown';
+                 const desc = t.name || t.description || '';
                  const { name, ...rest } = t;
                  return { ...rest, description: desc };
             });
              const importedPlans = data.plans.map((p: any) => {
-                 const desc = p.name || p.description || 'Unknown';
+                 const desc = p.name || p.description || '';
                  const { name, ...rest } = p;
                  return { ...rest, description: desc };
             });
@@ -519,7 +519,7 @@ export default function App() {
 
   const handleSaveData = (data: any) => {
     const now = Date.now();
-    const finalDescription = data.description?.trim() || 'Unknown';
+    const finalDescription = data.description?.trim() || '';
     // Allow empty category string
     const finalCategory = data.category ? data.category.trim() : '';
 
@@ -580,10 +580,14 @@ export default function App() {
             };
             setPlans(prev => [...prev, newPlan]);
 
-            // Handle Loan Logic: Create immediate transaction in reverse direction
+            // Handle Loan Logic: Create immediate transaction for total amount
             if (data.isLoan) {
                 // User entered Total in the amount field, so use it directly
                 const totalAmount = data.amount;
+                // Loan transaction usually implies receiving money (if it's a loan taken) or spending money (loan given)
+                // If I am taking a loan, I get INCOME (cash). Repayments are EXPENSE.
+                // If I create a PLAN for EXPENSE (repayment), then the initial TX is INCOME.
+                // If I create a PLAN for INCOME (I am being repaid), then initial TX is EXPENSE (I gave money).
                 const reverseType = data.type === 'expense' ? 'income' : 'expense';
                 
                 const principalTx: Transaction = {

@@ -200,8 +200,9 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
         <div 
             className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 w-full max-w-sm rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
             onClick={(e) => {
+                // IMPORTANT: This prevents clicks inside the modal content from closing the modal (the overlay click)
+                // AND it also closes the dropdown if it's open (click-outside logic for dropdown)
                 e.stopPropagation();
-                // Close dropdown if clicked outside of it (but inside modal)
                 if (isCatDropdownOpen) setIsCatDropdownOpen(false);
             }}
         >
@@ -261,7 +262,11 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                         value={category}
                         onChange={e => setCategory(e.target.value)}
                         onFocus={openCategoryDropdown}
-                        onClick={(e) => { e.stopPropagation(); openCategoryDropdown(); }}
+                        onClick={(e) => { 
+                            e.stopPropagation(); 
+                            // Only open if not already open to prevent immediate close via bubbling if we were toggling
+                            if (!isCatDropdownOpen) openCategoryDropdown();
+                        }}
                         className="w-full bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-400 px-3 py-2 rounded text-sm focus:border-indigo-500 focus:outline-none transition-colors"
                         placeholder={t.categoryPlaceholder}
                         autoComplete="off"
@@ -393,7 +398,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                                     </label>
 
                                     {isLoan && (
-                                        <div className="animate-in fade-in slide-in-from-right-2 flex-1 min-w-[120px] max-w-[60%] sm:max-w-[50%] ml-auto sm:ml-0">
+                                        <div className="animate-in fade-in slide-in-from-right-2 flex-1 min-w-[120px] ml-auto">
                                             <label className="block text-[9px] text-gray-500 dark:text-gray-600 uppercase mb-0.5 text-right">{t.repaymentStart}</label>
                                             <input 
                                                 type="date" 

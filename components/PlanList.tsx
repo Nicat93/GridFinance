@@ -248,7 +248,7 @@ const PlanList: React.FC<Props> = ({
                                                 className={`text-gray-700 dark:text-gray-200 leading-tight transition-all ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}
                                                 style={descStyle}
                                             >
-                                                {plan.description}
+                                                {plan.description || '?'}
                                             </div>
                                         </div>
                                     </div>

@@ -68,7 +68,7 @@ const PeriodTransitionModal: React.FC<Props> = ({
                     <div key={plan.id} className="p-4 flex flex-col gap-3 hover:bg-gray-50 dark:hover:bg-gray-900/20 transition-colors">
                         <div className="flex justify-between items-start">
                             <div>
-                                <div className="font-bold text-sm text-gray-800 dark:text-gray-200">{plan.description}</div>
+                                <div className="font-bold text-sm text-gray-800 dark:text-gray-200">{plan.description || '?'}</div>
                                 <div className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">
                                     Due: {formatDate(due)} • {plan.category}
                                 </div>

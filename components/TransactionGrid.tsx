@@ -195,7 +195,7 @@ const TransactionGrid: React.FC<Props> = ({
                                         className={`text-gray-700 dark:text-gray-200 leading-tight transition-all ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}
                                         style={descStyle}
                                     >
-                                        {tx.description}
+                                        {tx.description || '?'}
                                     </div>
                                 </div>
 
