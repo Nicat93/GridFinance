@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus, TransactionType, SortOption, CategoryDef, LanguageCode } from './types';
+import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus, TransactionType, SortOption, CategoryDef, LanguageCode, CurrencyCode } from './types';
 import TransactionGrid from './components/TransactionGrid';
 import SummaryBar from './components/SummaryBar';
 import AddTransactionModal from './components/AddTransactionModal';
@@ -125,6 +125,11 @@ export default function App() {
       return (saved as LanguageCode) || 'en';
   });
 
+  const [currency, setCurrency] = useState<CurrencyCode>(() => {
+      const saved = localStorage.getItem('currency');
+      return (saved as CurrencyCode) || 'USD';
+  });
+
   const [viewDate, setViewDate] = useState<Date>(() => new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -169,6 +174,7 @@ export default function App() {
   useEffect(() => { localStorage.setItem('syncConfig', JSON.stringify(syncConfig)); }, [syncConfig]);
   useEffect(() => { localStorage.setItem('theme', isDarkMode ? 'dark' : 'light'); }, [isDarkMode]);
   useEffect(() => { localStorage.setItem('language', language); }, [language]);
+  useEffect(() => { localStorage.setItem('currency', currency); }, [currency]);
 
   // --- Effects: Theme ---
   useEffect(() => {
@@ -741,7 +747,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen pb-20 bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-300 font-sans transition-colors relative">
-      <SummaryBar snapshot={snapshot} onUpdateDate={handleUpdateBillingDate} syncStatus={syncStatus} language={language} />
+      <SummaryBar snapshot={snapshot} onUpdateDate={handleUpdateBillingDate} syncStatus={syncStatus} language={language} currency={currency} />
       
       <main className="max-w-4xl mx-auto px-4">
         <FilterBar 
@@ -834,6 +840,7 @@ export default function App() {
         showDesignDebug={showDesignDebug} onToggleDesignDebug={() => setShowDesignDebug(!showDesignDebug)}
         onOpenCategoryManager={() => setIsCategoryManagerOpen(true)}
         language={language} onLanguageChange={setLanguage}
+        currency={currency} onCurrencyChange={setCurrency}
       />
       <CategoryManager 
         isOpen={isCategoryManagerOpen}
@@ -870,7 +877,7 @@ export default function App() {
           <PeriodTransitionModal
             isOpen={transitionState.isOpen} targetDate={transitionState.targetDate} pendingPlans={transitionState.pendingItems}
             onResolve={handleResolveTransitionItem} onContinue={handleFinishTransition} onCancel={() => setTransitionState(null)}
-            language={language}
+            language={language} currency={currency}
           />
       )}
     </div>

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { SyncConfig, LanguageCode } from '../types';
+import { SyncConfig, LanguageCode, CurrencyCode } from '../types';
 import { translations } from '../translations';
 
 interface Props {
@@ -19,12 +19,14 @@ interface Props {
   onOpenCategoryManager: () => void;
   language: LanguageCode;
   onLanguageChange: (lang: LanguageCode) => void;
+  currency: CurrencyCode;
+  onCurrencyChange: (code: CurrencyCode) => void;
 }
 
 const SettingsModal: React.FC<Props> = ({ 
     isOpen, onClose, isDarkMode, onToggleTheme, syncConfig, onSaveSyncConfig, onClearData,
     onExportData, onImportData, onAddMockData, showDesignDebug, onToggleDesignDebug, onOpenCategoryManager,
-    language, onLanguageChange
+    language, onLanguageChange, currency, onCurrencyChange
 }) => {
   const [syncId, setSyncId] = useState(syncConfig.syncId || '');
   const [enabled, setEnabled] = useState(syncConfig.enabled);
@@ -105,12 +107,28 @@ const SettingsModal: React.FC<Props> = ({
                     <select 
                         value={language}
                         onChange={(e) => onLanguageChange(e.target.value as LanguageCode)}
-                        className="bg-transparent text-xs font-bold text-indigo-600 dark:text-indigo-400 focus:outline-none"
+                        className="bg-transparent text-xs font-bold text-indigo-600 dark:text-indigo-400 focus:outline-none text-right"
                     >
                         <option value="en">English</option>
                         <option value="az">Azərbaycan</option>
                         <option value="ru">Русский</option>
                         <option value="tr">Türkçe</option>
+                    </select>
+                </div>
+
+                <div className="w-full flex items-center justify-between px-4 py-3 bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.currency}</span>
+                    <select 
+                        value={currency}
+                        onChange={(e) => onCurrencyChange(e.target.value as CurrencyCode)}
+                        className="bg-transparent text-xs font-bold text-indigo-600 dark:text-indigo-400 focus:outline-none text-right"
+                    >
+                        <option value="USD">USD ($)</option>
+                        <option value="EUR">EUR (€)</option>
+                        <option value="GBP">GBP (£)</option>
+                        <option value="TRY">TRY (₺)</option>
+                        <option value="AZN">AZN (₼)</option>
+                        <option value="RUB">RUB (₽)</option>
                     </select>
                 </div>
 

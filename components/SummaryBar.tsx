@@ -1,6 +1,6 @@
 
 import React, { useRef } from 'react';
-import { FinancialSnapshot, SyncStatus, LanguageCode } from '../types';
+import { FinancialSnapshot, SyncStatus, LanguageCode, CurrencyCode } from '../types';
 import { translations } from '../translations';
 
 interface Props {
@@ -8,13 +8,14 @@ interface Props {
   onUpdateDate: (date: Date) => void;
   syncStatus: SyncStatus;
   language: LanguageCode;
+  currency: CurrencyCode;
 }
 
-const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus, language }) => {
+const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus, language, currency }) => {
   const dateInputRef = useRef<HTMLInputElement>(null);
   const t = translations[language];
 
-  const formatMoney = (n: number) => n.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+  const formatMoney = (n: number) => n.toLocaleString(undefined, { style: 'currency', currency: currency });
   const formatDate = (d: Date) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   
   const toInputDate = (d: Date) => {
