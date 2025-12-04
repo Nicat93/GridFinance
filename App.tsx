@@ -521,7 +521,7 @@ export default function App() {
         const newDef: CategoryDef = {
             id: generateId(),
             name: finalCategory,
-            color: colors[Math.floor(Math.random() * colors.length)],
+            color: data.newCategoryColor || colors[Math.floor(Math.random() * colors.length)],
             lastModified: now
         };
         setCategoryDefs(prev => [...prev, newDef]);
@@ -554,13 +554,39 @@ export default function App() {
             };
             setTransactions(prev => [newTx, ...prev]);
         } else if (data.kind === 'plan') {
+            const count = data.maxOccurrences || 1;
+            // If it's a loan, the input amount is the Total, so the plan amount (monthly) is Total / Count.
+            // If it's not a loan, the input amount is the Monthly amount.
+            const finalPlanAmount = data.isLoan ? (data.amount / count) : data.amount;
+
             const newPlan: RecurringPlan = {
-                id: generateId(), description: finalDescription, amount: data.amount, type: data.type,
+                id: generateId(), description: finalDescription, 
+                amount: finalPlanAmount, 
+                type: data.type,
                 frequency: data.frequency, startDate: data.date, occurrencesGenerated: 0, category: finalCategory,
                 maxOccurrences: data.maxOccurrences, 
                 lastModified: now
             };
             setPlans(prev => [...prev, newPlan]);
+
+            // Handle Loan Logic: Create immediate transaction in reverse direction
+            if (data.isLoan) {
+                // User entered Total in the amount field, so use it directly
+                const totalAmount = data.amount;
+                const reverseType = data.type === 'expense' ? 'income' : 'expense';
+                
+                const principalTx: Transaction = {
+                    id: generateId(),
+                    date: data.date,
+                    description: `Loan Principal: ${finalDescription}`,
+                    amount: totalAmount,
+                    type: reverseType,
+                    category: finalCategory,
+                    isPaid: true,
+                    lastModified: now
+                };
+                setTransactions(prev => [principalTx, ...prev]);
+            }
         }
     }
   };

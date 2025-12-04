@@ -33,6 +33,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   const [isRecurring, setIsRecurring] = useState(false);
   const [frequency, setFrequency] = useState<Frequency>(Frequency.MONTHLY);
   const [maxOccurrences, setMaxOccurrences] = useState('');
+  const [isLoan, setIsLoan] = useState(false);
 
   // Calculator State
   const [calcTarget, setCalcTarget] = useState<'amount' | 'maxOccurrences' | null>(null);
@@ -67,12 +68,14 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
             setIsRecurring(true);
             setFrequency(plan.frequency);
             setMaxOccurrences(plan.maxOccurrences ? plan.maxOccurrences.toString() : '');
+            setIsLoan(false); // Can't toggle loan on edit usually
         } else {
             const tx = initialData as Transaction;
             setDate(tx.date);
             setIsRecurring(false);
             setFrequency(Frequency.MONTHLY);
             setMaxOccurrences('');
+            setIsLoan(false);
         }
       } else {
         setType('expense');
@@ -83,6 +86,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
         setIsRecurring(false);
         setFrequency(Frequency.MONTHLY);
         setMaxOccurrences('');
+        setIsLoan(false);
       }
     }
   }, [isOpen, initialData]);
@@ -104,7 +108,8 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
             ...baseData,
             kind: 'plan',
             frequency,
-            maxOccurrences: maxOccurrences ? Math.round(parseFloat(maxOccurrences)) : undefined, // Ensure integer
+            maxOccurrences: maxOccurrences ? Math.round(parseFloat(maxOccurrences)) : undefined,
+            isLoan: isLoan // Pass loan flag
         });
     } else {
         onSave({ ...baseData, kind: 'single' });
@@ -128,6 +133,11 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
       } else if (calcTarget === 'maxOccurrences') {
           setMaxOccurrences(val);
       }
+  };
+
+  const openCategoryDropdown = () => {
+      setCategory(''); // Clear field so all options are shown
+      setIsCatDropdownOpen(true);
   };
 
   const getColorStyle = (color: string) => {
@@ -163,7 +173,6 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
     c.name.toLowerCase().includes(category.toLowerCase())
   ).sort((a, b) => a.name.localeCompare(b.name));
 
-  // Determine implied color for new category
   const newCategoryColor = category ? pickColorForString(category) : 'gray';
   const newCategoryStyle = getColorStyle(newCategoryColor);
 
@@ -182,21 +191,21 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
             </div>
 
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
-            <div className="flex flex-wrap items-center gap-3">
-                <div className="flex-1 min-w-[120px]">
-                    <div 
-                        onClick={() => setCalcTarget('amount')}
-                        className={`w-full bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white px-3 py-2 rounded text-left font-mono text-xl cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors ${!amount ? 'text-gray-400' : ''}`}
-                    >
-                        {amount ? amount : '0.00'}
-                    </div>
+            
+            {/* Amount & Type Row */}
+            <div className="flex gap-3 h-10">
+                <div 
+                    onClick={() => setCalcTarget('amount')}
+                    className={`flex-1 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white px-3 py-2 rounded text-left font-mono text-lg flex items-center cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors ${!amount ? 'text-gray-400' : ''}`}
+                >
+                    {amount ? amount : '0.00'}
                 </div>
 
-                <div className="flex bg-gray-100 dark:bg-gray-900 rounded p-1 h-10 border border-gray-200 dark:border-gray-800 shrink-0">
+                <div className="flex bg-gray-100 dark:bg-gray-900 rounded p-1 border border-gray-200 dark:border-gray-800 shrink-0">
                     <button 
                     type="button"
                     onClick={() => setType('expense')}
-                    className={`px-3 text-sm font-bold rounded transition-colors ${type === 'expense' ? 'bg-white dark:bg-rose-900 text-rose-600 dark:text-rose-200 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                    className={`px-3 text-xs sm:text-sm font-bold rounded transition-colors flex items-center ${type === 'expense' ? 'bg-white dark:bg-rose-900 text-rose-600 dark:text-rose-200 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
                     >
                     - Exp
                     </button>
@@ -204,7 +213,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                     <button 
                     type="button"
                     onClick={() => setType('income')}
-                    className={`px-3 text-sm font-bold rounded transition-colors ${type === 'income' ? 'bg-white dark:bg-emerald-900 text-emerald-600 dark:text-emerald-200 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                    className={`px-3 text-xs sm:text-sm font-bold rounded transition-colors flex items-center ${type === 'income' ? 'bg-white dark:bg-emerald-900 text-emerald-600 dark:text-emerald-200 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
                     >
                     + Inc
                     </button>
@@ -229,13 +238,12 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                         type="text" 
                         value={category}
                         onChange={e => setCategory(e.target.value)}
-                        onFocus={() => setIsCatDropdownOpen(true)}
-                        onClick={(e) => { e.stopPropagation(); setIsCatDropdownOpen(true); }}
+                        onFocus={openCategoryDropdown}
+                        onClick={(e) => { e.stopPropagation(); openCategoryDropdown(); }}
                         className="w-full bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-400 px-3 py-2 rounded text-sm focus:border-indigo-500 focus:outline-none transition-colors"
                         placeholder="Category"
                         autoComplete="off"
                     />
-                    {/* Dropdown Chevron */}
                     <div className="absolute right-2 top-2.5 pointer-events-none text-gray-400">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                     </div>
@@ -247,7 +255,6 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                                     className="p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 flex items-center gap-2"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        // Auto-select; App.tsx handles creation on save
                                         setIsCatDropdownOpen(false);
                                     }}
                                 >
@@ -301,7 +308,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                             className="w-4 h-4 rounded border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 text-indigo-600 focus:ring-0 focus:ring-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                         <span className={`text-sm select-none ${!!initialData && !('frequency' in initialData) ? 'text-gray-400 dark:text-gray-600' : 'text-gray-600 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-gray-300'}`}>
-                            Planned
+                            Planned / Recurring
                         </span>
                     </label>
 
@@ -331,6 +338,32 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Loan Checkbox */}
+                            {!initialData && (
+                                <div className="pt-2 border-t border-gray-200 dark:border-gray-800/50">
+                                    <label className="flex items-center gap-2 cursor-pointer group">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={isLoan} 
+                                            onChange={e => {
+                                                const checked = e.target.checked;
+                                                setIsLoan(checked);
+                                                if (checked && !maxOccurrences) setMaxOccurrences('1');
+                                            }}
+                                            className="w-4 h-4 rounded border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 text-indigo-600 focus:ring-0 focus:ring-offset-0"
+                                        />
+                                        <div className="flex flex-col">
+                                            <span className="text-xs font-bold text-gray-600 dark:text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                                Record as Loan / Installment
+                                            </span>
+                                            <span className="text-[9px] text-gray-400 dark:text-gray-600">
+                                                Creates immediate {type === 'expense' ? 'income' : 'expense'} for total amount
+                                            </span>
+                                        </div>
+                                    </label>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
