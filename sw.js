@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'grid-finance-v39';
+const CACHE_NAME = 'grid-finance-v40';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

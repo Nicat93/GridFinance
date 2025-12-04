@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus, TransactionType, SortOption } from './types';
 import TransactionGrid from './components/TransactionGrid';
@@ -127,8 +126,8 @@ export default function App() {
   
   // Design Debugger State
   const [showDesignDebug, setShowDesignDebug] = useState(false);
-  // Default: 11px font, increased padding (0.35rem) to compensate height
-  const [designConfig, setDesignConfig] = useState<DesignConfig>({ fontSize: 11, paddingY: 0.35 });
+  // Default: 11px font, reduced padding (0.1rem)
+  const [designConfig, setDesignConfig] = useState<DesignConfig>({ fontSize: 11, paddingY: 0.1 });
 
   // Dialog state for "Apply Now" edge case where date falls in next cycle
   const [shiftCycleDialog, setShiftCycleDialog] = useState<{ isOpen: boolean, planId: string, newDate: Date } | null>(null);
