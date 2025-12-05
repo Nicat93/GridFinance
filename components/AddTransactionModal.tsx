@@ -1,6 +1,6 @@
 
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Frequency, TransactionType, Transaction, RecurringPlan, CategoryDef, LanguageCode } from '../types';
 import CalculatorSheet from './CalculatorSheet';
 import { translations } from '../translations';
@@ -41,7 +41,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   const [frequency, setFrequency] = useState<Frequency>(Frequency.MONTHLY);
   const [maxOccurrences, setMaxOccurrences] = useState('');
   const [isLoan, setIsLoan] = useState(false);
-  const [planStartDate, setPlanStartDate] = useState(''); // Separate start date for loan repayment plans
+  const [planStartDate, setPlanStartDate] = useState(''); 
 
   // Calculator State
   const [calcTarget, setCalcTarget] = useState<'amount' | 'maxOccurrences' | null>(null);
@@ -51,7 +51,6 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   
   const t = translations[language];
 
-  // Lock body scroll when modal is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -69,7 +68,6 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
         setType(initialData.type);
         setAmount(initialData.amount.toString());
         setDescription(initialData.description || '');
-        // Initialize Tags (fallback to empty if migration hasn't run yet on this specific object in memory)
         setSelectedTags(initialData.tags || []);
         
         if ('frequency' in initialData) {
@@ -79,7 +77,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
             setIsRecurring(true);
             setFrequency(plan.frequency);
             setMaxOccurrences(plan.maxOccurrences ? plan.maxOccurrences.toString() : '');
-            setIsLoan(false); // Can't toggle loan on edit usually
+            setIsLoan(false); 
         } else {
             const tx = initialData as Transaction;
             setDate(tx.date);
@@ -125,7 +123,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
             frequency,
             maxOccurrences: maxOccurrences ? Math.round(parseFloat(maxOccurrences)) : undefined,
             isLoan: isLoan,
-            planStartDate: isLoan ? planStartDate : undefined // Pass the separate start date if loan
+            planStartDate: isLoan ? planStartDate : undefined 
         });
     } else {
         onSave({ ...baseData, kind: 'single' });
@@ -147,7 +145,6 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
       if (calcTarget === 'amount') {
           setAmount(val);
       } else if (calcTarget === 'maxOccurrences') {
-          // If value is 0 (or empty), treat as infinite
           if (parseFloat(val) === 0 || val === '') {
               setMaxOccurrences('');
           } else {
@@ -185,7 +182,6 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
     }
   };
 
-  // --- Tag Logic ---
   const addTag = (tag: string) => {
       const trimmed = tag.trim();
       if (trimmed && !selectedTags.includes(trimmed)) {
@@ -230,7 +226,6 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
 
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
             
-            {/* Amount & Type Row */}
             <div className="flex gap-3 h-10">
                 <div 
                     onClick={() => setCalcTarget('amount')}
@@ -269,196 +264,172 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                 />
             </div>
 
-            {/* Tag Selection */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="relative">
-                    {/* Selected Tags Display */}
                     {selectedTags.length > 0 && (
                         <div className="flex flex-wrap gap-1 mb-2">
                             {selectedTags.map(tag => {
-                                // Find color if exists
                                 const def = categories.find(c => c.name.toLowerCase() === tag.toLowerCase());
                                 const color = def ? def.color : pickColorForString(tag);
                                 const style = getColorStyle(color);
                                 return (
-                                    <span 
-                                        key={tag} 
-                                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-white ${style.className || ''}`}
-                                        style={style.style}
-                                    >
+                                    <span key={tag} className={`px-2 py-0.5 rounded text-xs font-bold text-white flex items-center gap-1 ${style.className}`} style={style.style}>
                                         {tag}
-                                        <button 
-                                            type="button" 
-                                            onClick={() => removeTag(tag)}
-                                            className="hover:text-gray-200"
-                                        >✕</button>
+                                        <button type="button" onClick={() => removeTag(tag)} className="hover:text-black/50">×</button>
                                     </span>
                                 )
                             })}
                         </div>
                     )}
-
-                    <input 
-                        type="text" 
-                        value={tagInput}
-                        onChange={e => setTagInput(e.target.value)}
-                        onFocus={() => setIsTagDropdownOpen(true)}
-                        onKeyDown={handleTagInputKeyDown}
-                        onClick={(e) => { e.stopPropagation(); setIsTagDropdownOpen(true); }}
-                        className="w-full bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-400 px-3 py-2 rounded text-sm focus:border-indigo-500 focus:outline-none transition-colors"
-                        placeholder={t.categoryPlaceholder}
-                        autoComplete="off"
-                    />
                     
-                    {isTagDropdownOpen && (
-                        <div className="absolute z-20 left-0 right-0 mt-1 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                            {tagInput.trim() !== '' && !filteredCategories.find(c => c.name.toLowerCase() === tagInput.trim().toLowerCase()) && (
-                                <div 
-                                    className="p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 flex items-center gap-2"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        addTag(tagInput);
-                                    }}
-                                >
-                                    <span className="text-sm text-gray-600 dark:text-gray-300 font-bold">+ {t.create} "{tagInput}"</span>
-                                </div>
-                            )}
-                            
-                            {filteredCategories.length === 0 && !tagInput.trim() && (
-                                <div className="p-2 text-xs text-gray-400 italic text-center">{t.typeToAdd}</div>
-                            )}
-                            
-                            {filteredCategories.map(c => {
-                                const style = getColorStyle(c.color);
-                                return (
-                                <div 
-                                    key={c.id}
-                                    onClick={(e) => { 
-                                        e.stopPropagation(); 
-                                        addTag(c.name);
-                                    }}
-                                    className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
-                                >
+                    <div>
+                         <input
+                            type="text"
+                            value={tagInput}
+                            onChange={(e) => { setTagInput(e.target.value); setIsTagDropdownOpen(true); }}
+                            onKeyDown={handleTagInputKeyDown}
+                            onFocus={() => setIsTagDropdownOpen(true)}
+                            placeholder={t.categoryPlaceholder}
+                            className="w-full bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-300 px-3 py-2 rounded text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                         />
+                    </div>
+
+                    {isTagDropdownOpen && tagInput && (
+                        <div className="absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 mt-1 rounded shadow-lg max-h-40 overflow-y-auto">
+                            {filteredCategories.length > 0 ? (
+                                filteredCategories.map(cat => (
                                     <div 
-                                        className={`w-3 h-3 rounded-full ${style.className || ''}`}
-                                        style={style.style}
-                                    ></div>
-                                    <span>{c.name}</span>
+                                        key={cat.id} 
+                                        onClick={() => addTag(cat.name)}
+                                        className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-sm flex items-center gap-2"
+                                    >
+                                        <div className={`w-2 h-2 rounded-full ${getColorStyle(cat.color).className}`} style={getColorStyle(cat.color).style}></div>
+                                        <span className="text-gray-800 dark:text-gray-200">{cat.name}</span>
+                                    </div>
+                                ))
+                            ) : (
+                                <div 
+                                    onClick={() => addTag(tagInput)}
+                                    className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-sm text-indigo-600 dark:text-indigo-400 font-bold"
+                                >
+                                    + {t.add} "{tagInput}"
                                 </div>
-                            )})}
+                            )}
                         </div>
                     )}
                 </div>
 
-                <input 
-                    type="date" 
-                    required
-                    value={date}
-                    onChange={e => setDate(e.target.value)}
-                    className="bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-400 px-3 py-2 rounded text-sm focus:border-indigo-500 focus:outline-none transition-colors h-[38px] self-end"
-                />
+                <div>
+                    <input 
+                        type="date" 
+                        value={date}
+                        onChange={e => setDate(e.target.value)}
+                        className="w-full bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-300 px-3 py-2 rounded text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                    />
+                </div>
+            </div>
+
+            <div className="bg-gray-50 dark:bg-gray-900/30 p-3 rounded-lg space-y-3 border border-gray-100 dark:border-gray-800">
+                <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{t.plannedRecurring}</span>
+                    <input 
+                        type="checkbox" 
+                        checked={isRecurring}
+                        onChange={e => setIsRecurring(e.target.checked)}
+                        className="w-5 h-5 accent-indigo-600"
+                    />
+                </div>
+
+                {isRecurring && (
+                    <div className="space-y-3 animate-in slide-in-from-top-2 pt-2">
+                        <div>
+                             <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">{t.frequency}</label>
+                             <div className="flex rounded-md shadow-sm">
+                                {[Frequency.WEEKLY, Frequency.MONTHLY, Frequency.YEARLY, Frequency.ONE_TIME].map((f) => (
+                                    <button
+                                        key={f}
+                                        type="button"
+                                        onClick={() => handleFrequencyChange(f)}
+                                        className={`flex-1 px-2 py-1.5 text-[10px] sm:text-xs font-medium border border-gray-200 dark:border-gray-700 first:rounded-l-md last:rounded-r-md 
+                                            ${frequency === f 
+                                                ? 'bg-indigo-600 text-white border-indigo-600 z-10' 
+                                                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                            }`}
+                                    >
+                                        {f}
+                                    </button>
+                                ))}
+                             </div>
+                        </div>
+
+                        {frequency !== Frequency.ONE_TIME && (
+                            <div className="flex gap-3">
+                                <div className="flex-1">
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">{t.totalPayments} (Optional)</label>
+                                    <input 
+                                        type="number" 
+                                        value={maxOccurrences}
+                                        onChange={e => setMaxOccurrences(e.target.value)}
+                                        onClick={() => setCalcTarget('maxOccurrences')}
+                                        placeholder="∞"
+                                        className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white px-3 py-2 rounded text-sm focus:outline-none focus:border-indigo-500"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {frequency !== Frequency.ONE_TIME && (
+                            <div>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <input 
+                                        type="checkbox" 
+                                        id="isLoan"
+                                        checked={isLoan}
+                                        onChange={e => setIsLoan(e.target.checked)}
+                                        className="accent-indigo-600"
+                                    />
+                                    <label htmlFor="isLoan" className="text-sm text-gray-700 dark:text-gray-300 font-medium cursor-pointer">{t.loanInstallment}</label>
+                                </div>
+                                {isLoan && (
+                                    <div className="pl-6 space-y-2">
+                                        <p className="text-[10px] text-gray-500 italic">
+                                            {t.loanDesc}
+                                        </p>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">{t.repaymentStart}</label>
+                                            <input 
+                                                type="date" 
+                                                value={planStartDate}
+                                                onChange={e => setPlanStartDate(e.target.value)}
+                                                className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white px-3 py-2 rounded text-sm focus:outline-none focus:border-indigo-500"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             <div className="pt-2">
-                    <label className="flex items-center gap-2 cursor-pointer group">
-                        <input 
-                            type="checkbox" 
-                            checked={isRecurring} 
-                            disabled={!!initialData && !('frequency' in initialData)} 
-                            onChange={e => setIsRecurring(e.target.checked)}
-                            className="w-4 h-4 rounded border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 text-indigo-600 focus:ring-0 focus:ring-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                        />
-                        <span className={`text-sm select-none ${!!initialData && !('frequency' in initialData) ? 'text-gray-400 dark:text-gray-600' : 'text-gray-600 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-gray-300'}`}>
-                            {t.plannedRecurring}
-                        </span>
-                    </label>
+                <button 
+                    type="submit" 
+                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-lg font-bold text-lg shadow-lg transition-colors flex items-center justify-center gap-2"
+                >
+                    {initialData ? t.update : (isRecurring ? t.createPlan : t.addTransaction)}
+                </button>
+            </div>
 
-                    {isRecurring && (
-                        <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded space-y-3 animate-in fade-in slide-in-from-top-2">
-                            
-                            {/* Frequency & Payments Row - Moved to Top */}
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-xs text-gray-500 dark:text-gray-600 uppercase mb-1">{t.frequency}</label>
-                                    <select 
-                                        value={frequency}
-                                        onChange={(e) => handleFrequencyChange(e.target.value as Frequency)}
-                                        className="w-full bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-300 p-1.5 rounded text-sm focus:outline-none"
-                                    >
-                                        <option value={Frequency.ONE_TIME}>One-time</option>
-                                        <option value={Frequency.WEEKLY}>Weekly</option>
-                                        <option value={Frequency.MONTHLY}>Monthly</option>
-                                        <option value={Frequency.YEARLY}>Yearly</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs text-gray-500 dark:text-gray-600 uppercase mb-1">{t.totalPayments}</label>
-                                    <div 
-                                        onClick={() => frequency !== Frequency.ONE_TIME && setCalcTarget('maxOccurrences')}
-                                        className={`w-full bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-300 p-1.5 rounded text-sm font-mono truncate h-[34px] flex items-center ${frequency === Frequency.ONE_TIME ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900'}`}
-                                    >
-                                        {maxOccurrences ? maxOccurrences : <span className="text-gray-400">∞</span>}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Loan Checkbox Row - Moved Below Frequency */}
-                            {!initialData && (
-                                <div className="pt-3 border-t border-gray-200 dark:border-gray-800/50 flex items-center justify-between gap-2">
-                                    <label className="flex items-center gap-2 cursor-pointer group shrink-0">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={isLoan} 
-                                            onChange={e => {
-                                                const checked = e.target.checked;
-                                                setIsLoan(checked);
-                                                if (checked && !maxOccurrences) setMaxOccurrences('1');
-                                            }}
-                                            className="w-4 h-4 rounded border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 text-indigo-600 focus:ring-0 focus:ring-offset-0"
-                                        />
-                                        <div className="flex flex-col">
-                                            <span className="text-xs font-bold text-gray-600 dark:text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                                                {t.loanInstallment}
-                                            </span>
-                                            {!isLoan && (
-                                                <span className="text-[9px] text-gray-400 dark:text-gray-600 hidden sm:inline">
-                                                    {t.loanDesc}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </label>
-
-                                    {isLoan && (
-                                        <div className="animate-in fade-in slide-in-from-right-2 flex-1 max-w-[50%]">
-                                            <label className="block text-[9px] text-gray-500 dark:text-gray-600 uppercase mb-0.5 text-right">{t.repaymentStart}</label>
-                                            <input 
-                                                type="date" 
-                                                required
-                                                value={planStartDate}
-                                                onChange={e => setPlanStartDate(e.target.value)}
-                                                className="w-full bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-300 p-1 rounded text-xs focus:outline-none"
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                        </div>
-                    )}
-                </div>
-
-            <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-lg text-base shadow-lg transition-all mt-4">
-                {initialData ? t.update : (isRecurring ? t.createPlan : t.addTransaction)}
-            </button>
             </form>
         </div>
         </div>
 
         <CalculatorSheet 
-            isOpen={!!calcTarget}
+            isOpen={calcTarget !== null} 
             initialValue={calcTarget === 'amount' ? amount : maxOccurrences}
-            onClose={() => setCalcTarget(null)}
-            onApply={handleCalculatorApply}
+            onClose={() => setCalcTarget(null)} 
+            onApply={handleCalculatorApply} 
         />
     </>
   );

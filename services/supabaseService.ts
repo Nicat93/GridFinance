@@ -1,4 +1,7 @@
 
+
+
+
 import { createClient } from '@supabase/supabase-js';
 import { BackupData, SyncConfig, Transaction, RecurringPlan, CategoryDef } from '../types';
 
@@ -120,9 +123,15 @@ export const pullChanges = async (config: SyncConfig, lastSyncedAt: number) => {
         };
 
     } catch (e: any) {
-        console.error("Sync Pull Error:", e.message);
-        if (e.message?.includes('relation') && e.message?.includes('does not exist')) {
-            console.error("IMPORTANT: You must run the SQL migration script in Supabase to create 'grid_transactions', 'grid_plans', and 'grid_categories' tables.");
+        // Handle Network Errors gracefully
+        const msg = e.message || String(e);
+        if (msg.match(/NetworkError|Failed to fetch|connection|Internet/i)) {
+            console.warn("Sync paused: Network unavailable.");
+        } else {
+            console.error("Sync Pull Error:", msg);
+            if (msg.includes('relation') && msg.includes('does not exist')) {
+                console.error("IMPORTANT: You must run the SQL migration script in Supabase to create 'grid_transactions', 'grid_plans', and 'grid_categories' tables.");
+            }
         }
         return null;
     }
@@ -236,7 +245,12 @@ export const pushChanges = async (
 
         return { success: true, uploadSizeBytes };
     } catch (e: any) {
-        console.error("Sync Push Error:", e.message);
+        const msg = e.message || String(e);
+        if (msg.match(/NetworkError|Failed to fetch|connection|Internet/i)) {
+            console.warn("Sync paused: Network unavailable during push.");
+        } else {
+            console.error("Sync Push Error:", msg);
+        }
         return { success: false, uploadSizeBytes: 0 };
     }
 };

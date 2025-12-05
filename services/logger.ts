@@ -1,4 +1,7 @@
 
+
+
+
 export type LogLevel = 'info' | 'warn' | 'error' | 'log';
 
 export interface LogEntry {
@@ -44,6 +47,9 @@ class LoggerService {
 
   private addLog(level: LogLevel, args: any[]) {
     const messages = args.map(arg => {
+      if (arg instanceof Error || (arg && typeof arg === 'object' && arg.message && arg.name)) {
+          return `${arg.name}: ${arg.message}\n${arg.stack || ''}`;
+      }
       if (typeof arg === 'object') {
         try {
             // Simple truncation for objects to save space

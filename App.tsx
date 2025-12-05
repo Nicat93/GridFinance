@@ -1,4 +1,7 @@
 
+
+
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, BackupData, SyncStatus, TransactionType, SortOption, CategoryDef, LanguageCode } from './types';
 import TransactionGrid from './components/TransactionGrid';
@@ -228,6 +231,12 @@ export default function App() {
       if (!currentConfig.enabled || !currentConfig.syncId) return;
       if (isSyncingRef.current) return;
       
+      // Check online status first to avoid "NetworkError" logs
+      if (!navigator.onLine) {
+          setSyncStatus('offline');
+          return;
+      }
+      
       isSyncingRef.current = true;
       setSyncStatus('syncing');
       setSyncStats(null);
@@ -303,7 +312,9 @@ export default function App() {
             setSyncConfig(prev => ({ ...prev, lastSyncedAt: syncStartTime }));
             setSyncStats({ up: upSize, down: downSize });
           } else {
-            setSyncStatus('error');
+             // If push failed but not thrown (handled in service), check online
+             if (!navigator.onLine) setSyncStatus('offline');
+             else setSyncStatus('error');
           }
       } catch (e) {
           console.error("Sync loop error", e);
@@ -326,21 +337,37 @@ export default function App() {
       if (isFirstMount.current) { isFirstMount.current = false; return; }
       if (!syncConfig.enabled) return;
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-      syncTimeoutRef.current = window.setTimeout(() => { triggerSync(); }, 3000); 
+      
+      const attemptSync = () => {
+          if (navigator.onLine) {
+              triggerSync();
+          } else {
+              setSyncStatus('offline');
+          }
+      };
+
+      syncTimeoutRef.current = window.setTimeout(attemptSync, 3000); 
       return () => { if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current); }
   }, [transactions, plans, cycleStartDay, deletedIds, categoryDefs, triggerSync, syncConfig.enabled]); 
 
   useEffect(() => {
       const handleVisibilityChange = () => {
           if (document.visibilityState === 'visible' && syncConfig.enabled) {
-              triggerSync();
+              if (navigator.onLine) triggerSync();
+              else setSyncStatus('offline');
           }
       };
       document.addEventListener('visibilitychange', handleVisibilityChange);
       window.addEventListener('focus', handleVisibilityChange);
+      // Also listen for online/offline events
+      window.addEventListener('online', () => triggerSync());
+      window.addEventListener('offline', () => setSyncStatus('offline'));
+
       return () => {
           document.removeEventListener('visibilitychange', handleVisibilityChange);
           window.removeEventListener('focus', handleVisibilityChange);
+          window.removeEventListener('online', () => triggerSync());
+          window.removeEventListener('offline', () => setSyncStatus('offline'));
       };
   }, [syncConfig.enabled, triggerSync]);
 
@@ -892,6 +919,7 @@ export default function App() {
         }}
         language={language}
       />
+      
       <ConfirmModal 
         isOpen={!!shiftCycleDialog} title={t.confirmTitle} message={`This payment (${shiftCycleDialog?.newDate.toLocaleDateString()}) falls in the next billing cycle. Shift cycle start to ${shiftCycleDialog?.newDate.getDate()}th?`}
         onConfirm={handleConfirmShiftCycle} confirmText="Yes, Shift Cycle" onAlternative={handleAlternativeKeepCycle} alternativeText="No, Keep Current" onCancel={() => setShiftCycleDialog(null)} cancelText={t.cancel}

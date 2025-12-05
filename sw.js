@@ -1,14 +1,14 @@
 
 
 
-const CACHE_NAME = 'grid-finance-v64';
-const ASSETS_TO_CACHE = [
+
+
+const CACHE_NAME = 'grid-finance-v65';
+const CORE_ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  './assets/index.js',
   './icon.svg',
-  // Cache the CDN for offline use
   'https://cdn.tailwindcss.com'
 ];
 
@@ -18,8 +18,24 @@ self.addEventListener('install', (event) => {
   self.skipWaiting(); 
   
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
+    caches.open(CACHE_NAME).then(async (cache) => {
+      // Robust caching: try caching one by one so one failure doesn't break all
+      for (const asset of CORE_ASSETS) {
+        try {
+            await cache.add(asset);
+        } catch (err) {
+            console.log('SW: Failed to cache core asset', asset, err);
+        }
+      }
+      
+      // Try to cache the build output JS. 
+      // In development mode, this file might not exist, so we catch the error 
+      // to prevent the Service Worker from failing to install completely.
+      try {
+        await cache.add('./assets/index.js');
+      } catch (e) {
+        console.log('SW: Build asset ./assets/index.js not found (expected in dev mode)');
+      }
     })
   );
 });
