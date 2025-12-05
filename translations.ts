@@ -76,7 +76,20 @@ export const translations = {
     paid: 'Paid',
     skip: 'Skip this',
     finish: 'Finish',
-    ignoreRemaining: 'Ignore Remaining'
+    ignoreRemaining: 'Ignore Remaining',
+    // New additions
+    tagExists: 'Tag already exists',
+    deleteTagConfirm: 'Delete this tag? Transactions using it will keep the text name but lose the color.',
+    noTags: 'No tags defined.',
+    newTagName: 'New Tag Name...',
+    add: 'Add',
+    more: 'More',
+    unresolvedDesc: 'The following items from the previous period were not marked as paid.',
+    allResolved: 'All items resolved.',
+    due: 'Due',
+    to: 'to',
+    on: 'on',
+    cancelChange: 'Cancel Change'
   },
   az: {
     current: 'Cari',
@@ -151,7 +164,20 @@ export const translations = {
     paid: 'Ödənildi',
     skip: 'Burax',
     finish: 'Bitir',
-    ignoreRemaining: 'Qalanları rədd et'
+    ignoreRemaining: 'Qalanları rədd et',
+    // New additions
+    tagExists: 'Teq artıq mövcuddur',
+    deleteTagConfirm: 'Bu teq silinsin? Onu istifadə edən əməliyyatlar adı saxlayacaq, amma rəngi itirəcək.',
+    noTags: 'Teq təyin edilməyib.',
+    newTagName: 'Yeni Teq Adı...',
+    add: 'Əlavə et',
+    more: 'Daha çox',
+    unresolvedDesc: 'Əvvəlki dövrdən olan bu maddələr ödənilmiş kimi qeyd olunmayıb.',
+    allResolved: 'Bütün maddələr həll olundu.',
+    due: 'Son tarix',
+    to: 'tarixinə',
+    on: 'tarixində',
+    cancelChange: 'Dəyişikliyi ləğv et'
   },
   ru: {
     current: 'Текущий',
@@ -226,7 +252,20 @@ export const translations = {
     paid: 'Оплачено',
     skip: 'Пропустить',
     finish: 'Завершить',
-    ignoreRemaining: 'Игнорировать ост.'
+    ignoreRemaining: 'Игнорировать ост.',
+    // New additions
+    tagExists: 'Тег уже существует',
+    deleteTagConfirm: 'Удалить тег? Транзакции с ним сохранят имя, но потеряют цвет.',
+    noTags: 'Теги не определены.',
+    newTagName: 'Имя нового тега...',
+    add: 'Добавить',
+    more: 'Еще',
+    unresolvedDesc: 'Следующие элементы из прошлого периода не были отмечены как оплаченные.',
+    allResolved: 'Все элементы решены.',
+    due: 'Срок',
+    to: 'на',
+    on: 'в',
+    cancelChange: 'Отменить изменение'
   },
   tr: {
     current: 'Mevcut',
@@ -301,6 +340,19 @@ export const translations = {
     paid: 'Ödendi',
     skip: 'Atla',
     finish: 'Bitir',
-    ignoreRemaining: 'Kalanı Yoksay'
+    ignoreRemaining: 'Kalanı Yoksay',
+    // New additions
+    tagExists: 'Etiket zaten var',
+    deleteTagConfirm: 'Bu etiket silinsin mi? Onu kullanan işlemler ismi koruyacak ancak rengi kaybedecek.',
+    noTags: 'Etiket tanımlanmadı.',
+    newTagName: 'Yeni Etiket Adı...',
+    add: 'Ekle',
+    more: 'Daha',
+    unresolvedDesc: 'Önceki dönemden kalan bu öğeler ödendi olarak işaretlenmedi.',
+    allResolved: 'Tüm öğeler çözüldü.',
+    due: 'Vade',
+    to: 'tarihine',
+    on: 'tarihinde',
+    cancelChange: 'Değişikliği İptal Et'
   }
 };

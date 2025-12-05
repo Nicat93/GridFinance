@@ -1,5 +1,8 @@
 
+
 import React, { useState, useEffect } from 'react';
+import { LanguageCode } from '../types';
+import { translations } from '../translations';
 
 interface Props {
   isOpen: boolean;
@@ -7,11 +10,13 @@ interface Props {
   endDate: string;
   onClose: () => void;
   onApply: (start: string, end: string) => void;
+  language: LanguageCode;
 }
 
-const DateRangeModal: React.FC<Props> = ({ isOpen, startDate, endDate, onClose, onApply }) => {
+const DateRangeModal: React.FC<Props> = ({ isOpen, startDate, endDate, onClose, onApply, language }) => {
   const [localStart, setLocalStart] = useState(startDate);
   const [localEnd, setLocalEnd] = useState(endDate);
+  const t = translations[language];
 
   useEffect(() => {
     if (isOpen) {
@@ -47,13 +52,13 @@ const DateRangeModal: React.FC<Props> = ({ isOpen, startDate, endDate, onClose, 
       >
         
         <div className="p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 flex justify-between items-center">
-            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200">Filter Dates</h2>
+            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200">{t.filterDates}</h2>
             <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:hover:text-white">✕</button>
         </div>
 
         <div className="p-5 space-y-4">
             <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Start Date</label>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">{t.startDate}</label>
                 <input 
                     type="date" 
                     value={localStart}
@@ -63,7 +68,7 @@ const DateRangeModal: React.FC<Props> = ({ isOpen, startDate, endDate, onClose, 
             </div>
             
             <div>
-                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">End Date</label>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">{t.endDate}</label>
                 <input 
                     type="date" 
                     value={localEnd}
@@ -77,13 +82,13 @@ const DateRangeModal: React.FC<Props> = ({ isOpen, startDate, endDate, onClose, 
                     onClick={handleClear}
                     className="flex-1 py-2 rounded text-sm font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                 >
-                    Clear Filter
+                    {t.clearFilter}
                 </button>
                 <button 
                     onClick={handleApply}
                     className="flex-1 py-2 rounded text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-sm transition-colors"
                 >
-                    Apply
+                    {t.apply}
                 </button>
             </div>
         </div>
