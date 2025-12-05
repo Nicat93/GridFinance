@@ -1,6 +1,11 @@
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { logger } from './services/logger';
+
+// Initialize System Logger (captures console output to local storage)
+logger.init();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

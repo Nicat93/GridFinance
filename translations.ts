@@ -1,5 +1,6 @@
 
 
+
 import { LanguageCode } from './types';
 
 export const translations = {
@@ -77,7 +78,6 @@ export const translations = {
     skip: 'Skip this',
     finish: 'Finish',
     ignoreRemaining: 'Ignore Remaining',
-    // New additions
     tagExists: 'Tag already exists',
     deleteTagConfirm: 'Delete this tag? Transactions using it will keep the text name but lose the color.',
     noTags: 'No tags defined.',
@@ -89,7 +89,11 @@ export const translations = {
     due: 'Due',
     to: 'to',
     on: 'on',
-    cancelChange: 'Cancel Change'
+    cancelChange: 'Cancel Change',
+    // Logs
+    systemLogs: 'System Logs',
+    clearLogs: 'Clear Logs',
+    noLogs: 'No logs recorded.'
   },
   az: {
     current: 'Cari',
@@ -165,7 +169,6 @@ export const translations = {
     skip: 'Burax',
     finish: 'Bitir',
     ignoreRemaining: 'Qalanları rədd et',
-    // New additions
     tagExists: 'Teq artıq mövcuddur',
     deleteTagConfirm: 'Bu teq silinsin? Onu istifadə edən əməliyyatlar adı saxlayacaq, amma rəngi itirəcək.',
     noTags: 'Teq təyin edilməyib.',
@@ -177,7 +180,11 @@ export const translations = {
     due: 'Son tarix',
     to: 'tarixinə',
     on: 'tarixində',
-    cancelChange: 'Dəyişikliyi ləğv et'
+    cancelChange: 'Dəyişikliyi ləğv et',
+    // Logs
+    systemLogs: 'Sistem Logları',
+    clearLogs: 'Logları Təmizlə',
+    noLogs: 'Log yoxdur.'
   },
   ru: {
     current: 'Текущий',
@@ -253,7 +260,6 @@ export const translations = {
     skip: 'Пропустить',
     finish: 'Завершить',
     ignoreRemaining: 'Игнорировать ост.',
-    // New additions
     tagExists: 'Тег уже существует',
     deleteTagConfirm: 'Удалить тег? Транзакции с ним сохранят имя, но потеряют цвет.',
     noTags: 'Теги не определены.',
@@ -265,7 +271,11 @@ export const translations = {
     due: 'Срок',
     to: 'на',
     on: 'в',
-    cancelChange: 'Отменить изменение'
+    cancelChange: 'Отменить изменение',
+    // Logs
+    systemLogs: 'Системные логи',
+    clearLogs: 'Очистить логи',
+    noLogs: 'Логов нет.'
   },
   tr: {
     current: 'Mevcut',
@@ -341,7 +351,6 @@ export const translations = {
     skip: 'Atla',
     finish: 'Bitir',
     ignoreRemaining: 'Kalanı Yoksay',
-    // New additions
     tagExists: 'Etiket zaten var',
     deleteTagConfirm: 'Bu etiket silinsin mi? Onu kullanan işlemler ismi koruyacak ancak rengi kaybedecek.',
     noTags: 'Etiket tanımlanmadı.',
@@ -353,6 +362,10 @@ export const translations = {
     due: 'Vade',
     to: 'tarihine',
     on: 'tarihinde',
-    cancelChange: 'Değişikliği İptal Et'
+    cancelChange: 'Değişikliği İptal Et',
+    // Logs
+    systemLogs: 'Sistem Kayıtları',
+    clearLogs: 'Kayıtları Temizle',
+    noLogs: 'Kayıt yok.'
   }
 };

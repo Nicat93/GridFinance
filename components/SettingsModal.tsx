@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { SyncConfig, LanguageCode } from '../types';
 import { translations } from '../translations';
+import { logger, LogEntry } from '../services/logger';
 
 interface Props {
   isOpen: boolean;
@@ -29,6 +30,7 @@ const SettingsModal: React.FC<Props> = ({
   const [syncId, setSyncId] = useState(syncConfig.syncId || '');
   const [enabled, setEnabled] = useState(syncConfig.enabled);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   
   const t = translations[language];
 
@@ -37,6 +39,9 @@ const SettingsModal: React.FC<Props> = ({
       document.body.style.overflow = 'hidden';
       setSyncId(syncConfig.syncId || '');
       setEnabled(syncConfig.enabled);
+      // Subscribe to logger
+      const unsubscribe = logger.subscribe((newLogs) => setLogs([...newLogs]));
+      return unsubscribe;
     } else {
       document.body.style.overflow = '';
     }
@@ -74,7 +79,7 @@ const SettingsModal: React.FC<Props> = ({
         onClick={onClose}
     >
       <div 
-        className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+        className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         
@@ -84,7 +89,7 @@ const SettingsModal: React.FC<Props> = ({
             <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:hover:text-white">✕</button>
         </div>
 
-        <div className="p-5 space-y-6 overflow-y-auto max-h-[80vh]">
+        <div className="p-5 space-y-6 overflow-y-auto">
             
             {/* General */}
             <div className="space-y-3">
@@ -214,6 +219,28 @@ const SettingsModal: React.FC<Props> = ({
                 >
                     {t.clearData}
                 </button>
+
+                {/* System Logs */}
+                <div className="pt-2">
+                    <div className="flex justify-between items-center mb-1">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase">{t.systemLogs}</span>
+                        <button onClick={() => logger.clear()} className="text-[10px] text-red-500 hover:underline">{t.clearLogs}</button>
+                    </div>
+                    <div className="bg-gray-100 dark:bg-gray-900 rounded p-2 h-32 overflow-y-auto font-mono text-[10px] border border-gray-200 dark:border-gray-800">
+                        {logs.length === 0 && <span className="text-gray-400 italic">{t.noLogs}</span>}
+                        {logs.map((log, i) => (
+                            <div key={i} className="mb-1 border-b border-gray-200 dark:border-gray-800 pb-1 last:border-0 last:pb-0">
+                                <span className="text-gray-400 mr-2 opacity-70">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
+                                <span className={`${log.level === 'error' ? 'text-red-500 font-bold' : log.level === 'warn' ? 'text-orange-500 font-bold' : 'text-gray-600 dark:text-gray-400'}`}>
+                                    {log.level.toUpperCase()}:
+                                </span>
+                                <span className="ml-1 text-gray-800 dark:text-gray-200 break-all leading-tight">
+                                    {log.messages.join(' ')}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
 
         </div>
