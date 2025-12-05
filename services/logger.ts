@@ -48,7 +48,7 @@ class LoggerService {
       if (arg === undefined) return 'undefined';
       if (arg === null) return 'null';
 
-      // 1. Handle standard Error objects
+      // 1. Handle standard Error objects directly
       if (arg instanceof Error) {
           return `${arg.name}: ${arg.message}\n${arg.stack || ''}`;
       }
@@ -56,14 +56,14 @@ class LoggerService {
       // 2. Handle Objects (including Error-like objects from other contexts)
       if (typeof arg === 'object') {
         try {
-            // Check for error-like properties if instanceof failed
+            // Check specifically for error-like properties if instanceof failed (e.g. from different window/iframe context)
             if (arg.message && (arg.name || arg.stack)) {
                  return `${arg.name || 'Error'}: ${arg.message}\n${arg.stack || ''}`;
             }
 
             const str = JSON.stringify(arg);
             
-            // If JSON.stringify returns empty object, it might be an Error or have non-enumerable props
+            // If JSON.stringify returns empty object, it might be an Error, Event, or have non-enumerable props
             if (str === '{}') {
                  // Try to extract own property names manually
                  const props = Object.getOwnPropertyNames(arg);
@@ -74,6 +74,12 @@ class LoggerService {
                      if (str2 !== '{}') return str2;
                  }
                  
+                 // Check if it's a DOMException or similar
+                 if (arg.constructor && arg.constructor.name) {
+                    // e.g. "DOMException: ..."
+                    if (arg.message) return `${arg.constructor.name}: ${arg.message}`;
+                 }
+
                  // Fallback to toString if it's meaningful
                  if (arg.toString && arg.toString() !== '[object Object]') {
                     return arg.toString();

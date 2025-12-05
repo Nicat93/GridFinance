@@ -4,6 +4,9 @@
 
 
 
+
+
+
 import { createClient } from '@supabase/supabase-js';
 import { BackupData, SyncConfig, Transaction, RecurringPlan, CategoryDef } from '../types';
 
@@ -126,18 +129,19 @@ export const pullChanges = async (config: SyncConfig, lastSyncedAt: number) => {
 
     } catch (e: any) {
         // Handle Network Errors gracefully
-        const msg = e.message || String(e);
+        const msg = (e.message || String(e)).toLowerCase();
         const isNetworkError = 
-            msg.toLowerCase().includes('network') || 
-            msg.toLowerCase().includes('fetch') || 
-            msg.toLowerCase().includes('connection') ||
-            msg.toLowerCase().includes('offline') ||
-            (e.name === 'TypeError' && !msg.includes('relation'));
+            msg.includes('network') || 
+            msg.includes('fetch') || 
+            msg.includes('connection') ||
+            msg.includes('offline') ||
+            msg.includes('load failed') ||
+            (e.name === 'TypeError'); // TypeError is thrown by fetch on network failure
 
         if (isNetworkError) {
             console.warn("Sync paused: Network unavailable.");
         } else {
-            console.error("Sync Pull Error:", msg);
+            console.error("Sync Pull Error:", e);
             if (msg.includes('relation') && msg.includes('does not exist')) {
                 console.error("IMPORTANT: You must run the SQL migration script in Supabase to create 'grid_transactions', 'grid_plans', and 'grid_categories' tables.");
             }
@@ -254,18 +258,19 @@ export const pushChanges = async (
 
         return { success: true, uploadSizeBytes };
     } catch (e: any) {
-        const msg = e.message || String(e);
+        const msg = (e.message || String(e)).toLowerCase();
         const isNetworkError = 
-            msg.toLowerCase().includes('network') || 
-            msg.toLowerCase().includes('fetch') || 
-            msg.toLowerCase().includes('connection') ||
-            msg.toLowerCase().includes('offline') ||
-            (e.name === 'TypeError' && !msg.includes('relation'));
+            msg.includes('network') || 
+            msg.includes('fetch') || 
+            msg.includes('connection') ||
+            msg.includes('offline') ||
+            msg.includes('load failed') ||
+            (e.name === 'TypeError');
 
         if (isNetworkError) {
             console.warn("Sync paused: Network unavailable during push.");
         } else {
-            console.error("Sync Push Error:", msg);
+            console.error("Sync Push Error:", e);
         }
         return { success: false, uploadSizeBytes: 0 };
     }

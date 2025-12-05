@@ -4,7 +4,10 @@
 
 
 
-const CACHE_NAME = 'grid-finance-v65';
+
+
+
+const CACHE_NAME = 'grid-finance-v66';
 const CORE_ASSETS = [
   './index.html',
   './manifest.json',
@@ -34,7 +37,7 @@ self.addEventListener('install', (event) => {
       try {
         await cache.add('./assets/index.js');
       } catch (e) {
-        console.log('SW: Build asset ./assets/index.js not found (expected in dev mode)');
+        // Expected in some dev environments or if build naming is different
       }
     })
   );

@@ -1,6 +1,4 @@
-
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Frequency, TransactionType, Transaction, RecurringPlan, CategoryDef, LanguageCode } from '../types';
 import CalculatorSheet from './CalculatorSheet';
 import { translations } from '../translations';
@@ -48,6 +46,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
 
   // Tag Dropdown State
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
+  const tagContainerRef = useRef<HTMLDivElement>(null);
   
   const t = translations[language];
 
@@ -61,6 +60,21 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
       document.body.style.overflow = '';
     };
   }, [isOpen]);
+
+  // Click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (tagContainerRef.current && !tagContainerRef.current.contains(event.target as Node)) {
+        setIsTagDropdownOpen(false);
+      }
+    };
+    if (isTagDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isTagDropdownOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -198,14 +212,23 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   const handleTagInputKeyDown = (e: React.KeyboardEvent) => {
       if (e.key === 'Enter') {
           e.preventDefault();
-          addTag(tagInput);
+          if (tagInput.trim()) {
+            addTag(tagInput);
+          }
       }
   };
 
+  // Sort: Matches first, then alphabetical
   const filteredCategories = categories.filter(c => 
     c.name.toLowerCase().includes(tagInput.toLowerCase()) &&
     !selectedTags.includes(c.name)
-  ).sort((a, b) => a.name.localeCompare(b.name));
+  ).sort((a, b) => {
+      const aStarts = a.name.toLowerCase().startsWith(tagInput.toLowerCase());
+      const bStarts = b.name.toLowerCase().startsWith(tagInput.toLowerCase());
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      return a.name.localeCompare(b.name);
+  });
 
   return (
     <>
@@ -265,7 +288,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="relative">
+                <div className="relative" ref={tagContainerRef}>
                     {selectedTags.length > 0 && (
                         <div className="flex flex-wrap gap-1 mb-2">
                             {selectedTags.map(tag => {
@@ -294,25 +317,32 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                          />
                     </div>
 
-                    {isTagDropdownOpen && tagInput && (
+                    {isTagDropdownOpen && (
                         <div className="absolute top-full left-0 right-0 z-10 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 mt-1 rounded shadow-lg max-h-40 overflow-y-auto">
-                            {filteredCategories.length > 0 ? (
-                                filteredCategories.map(cat => (
-                                    <div 
-                                        key={cat.id} 
-                                        onClick={() => addTag(cat.name)}
-                                        className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-sm flex items-center gap-2"
-                                    >
-                                        <div className={`w-2 h-2 rounded-full ${getColorStyle(cat.color).className}`} style={getColorStyle(cat.color).style}></div>
-                                        <span className="text-gray-800 dark:text-gray-200">{cat.name}</span>
-                                    </div>
-                                ))
-                            ) : (
+                            {filteredCategories.map(cat => (
+                                <div 
+                                    key={cat.id} 
+                                    onClick={() => addTag(cat.name)}
+                                    className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-sm flex items-center gap-2"
+                                >
+                                    <div className={`w-2 h-2 rounded-full ${getColorStyle(cat.color).className}`} style={getColorStyle(cat.color).style}></div>
+                                    <span className="text-gray-800 dark:text-gray-200">{cat.name}</span>
+                                </div>
+                            ))}
+
+                            {/* Show "Add new" if user is typing something that doesn't perfectly match an existing category */}
+                            {tagInput && !filteredCategories.some(c => c.name.toLowerCase() === tagInput.toLowerCase()) && (
                                 <div 
                                     onClick={() => addTag(tagInput)}
-                                    className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-sm text-indigo-600 dark:text-indigo-400 font-bold"
+                                    className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer text-sm text-indigo-600 dark:text-indigo-400 font-bold border-t border-gray-100 dark:border-gray-800"
                                 >
                                     + {t.add} "{tagInput}"
+                                </div>
+                            )}
+
+                            {filteredCategories.length === 0 && !tagInput && (
+                                <div className="px-3 py-2 text-xs text-gray-400 italic">
+                                    {t.noTags}
                                 </div>
                             )}
                         </div>
@@ -378,36 +408,34 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                             </div>
                         )}
 
-                        {frequency !== Frequency.ONE_TIME && (
-                            <div>
-                                <div className="flex items-center gap-2 mb-2">
-                                    <input 
-                                        type="checkbox" 
-                                        id="isLoan"
-                                        checked={isLoan}
-                                        onChange={e => setIsLoan(e.target.checked)}
-                                        className="accent-indigo-600"
-                                    />
-                                    <label htmlFor="isLoan" className="text-sm text-gray-700 dark:text-gray-300 font-medium cursor-pointer">{t.loanInstallment}</label>
-                                </div>
-                                {isLoan && (
-                                    <div className="pl-6 space-y-2">
-                                        <p className="text-[10px] text-gray-500 italic">
-                                            {t.loanDesc}
-                                        </p>
-                                        <div>
-                                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">{t.repaymentStart}</label>
-                                            <input 
-                                                type="date" 
-                                                value={planStartDate}
-                                                onChange={e => setPlanStartDate(e.target.value)}
-                                                className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white px-3 py-2 rounded text-sm focus:outline-none focus:border-indigo-500"
-                                            />
-                                        </div>
-                                    </div>
-                                )}
+                        <div>
+                            <div className="flex items-center gap-2 mb-2">
+                                <input 
+                                    type="checkbox" 
+                                    id="isLoan"
+                                    checked={isLoan}
+                                    onChange={e => setIsLoan(e.target.checked)}
+                                    className="accent-indigo-600"
+                                />
+                                <label htmlFor="isLoan" className="text-sm text-gray-700 dark:text-gray-300 font-medium cursor-pointer">{t.loanInstallment}</label>
                             </div>
-                        )}
+                            {isLoan && (
+                                <div className="pl-6 space-y-2">
+                                    <p className="text-[10px] text-gray-500 italic">
+                                        {t.loanDesc}
+                                    </p>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">{t.repaymentStart}</label>
+                                        <input 
+                                            type="date" 
+                                            value={planStartDate}
+                                            onChange={e => setPlanStartDate(e.target.value)}
+                                            className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white px-3 py-2 rounded text-sm focus:outline-none focus:border-indigo-500"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
             </div>
