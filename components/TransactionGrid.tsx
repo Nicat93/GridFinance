@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { Transaction, SortOption, CategoryDef, LanguageCode } from '../types';
 import { DesignConfig } from './DesignDebugger';
@@ -38,7 +39,7 @@ const TransactionGrid: React.FC<Props> = ({
         const lower = filterText.toLowerCase();
         result = result.filter(t => 
             t.description.toLowerCase().includes(lower) || 
-            (t.category && t.category.toLowerCase().includes(lower))
+            (t.tags && t.tags.some(tag => tag.toLowerCase().includes(lower)))
         );
     }
 
@@ -55,20 +56,28 @@ const TransactionGrid: React.FC<Props> = ({
         switch (sortOption) {
             case 'date_asc':
                 // For "Next Due" option, History should be Newest first (Descending)
-                return new Date(b.date).getTime() - new Date(a.date).getTime();
+                const dAscA = new Date(a.date).getTime();
+                const dAscB = new Date(b.date).getTime();
+                if (dAscA !== dAscB) return dAscB - dAscA;
+                // Stable sort by creation time (Newer first)
+                return (b.createdAt || 0) - (a.createdAt || 0);
             case 'description_asc':
                 return a.description.localeCompare(b.description);
             case 'amount_desc':
                 return b.amount - a.amount;
             case 'category':
-                return a.category.localeCompare(b.category);
+                // Sort by first tag
+                const tagA = a.tags && a.tags.length > 0 ? a.tags[0] : '';
+                const tagB = b.tags && b.tags.length > 0 ? b.tags[0] : '';
+                return tagA.localeCompare(tagB);
             case 'date_desc':
             default:
                 // Date Desc + Stability
                 const timeA = new Date(a.date).getTime();
                 const timeB = new Date(b.date).getTime();
                 if (timeA !== timeB) return timeB - timeA;
-                return (b.lastModified || 0) - (a.lastModified || 0);
+                // Stable sort by creation time (Newer first)
+                return (b.createdAt || 0) - (a.createdAt || 0);
         }
     });
 
@@ -87,8 +96,8 @@ const TransactionGrid: React.FC<Props> = ({
       return `${parts[1]}-${parts[2]}`;
   };
 
-  const getCategoryStyle = (catName: string): { className: string, style?: React.CSSProperties } => {
-      const def = categories.find(c => c.name.toLowerCase() === catName.toLowerCase());
+  const getTagStyle = (tagName: string): { className: string, style?: React.CSSProperties } => {
+      const def = categories.find(c => c.name.toLowerCase() === tagName.toLowerCase());
       const color = def ? def.color : 'gray';
       
       if (KNOWN_COLORS.includes(color)) {
@@ -115,7 +124,6 @@ const TransactionGrid: React.FC<Props> = ({
         }
       } else {
         // Custom Color (Hex, etc.)
-        // We assume 'color' is a valid CSS string
         return {
             className: 'border',
             style: {
@@ -178,7 +186,6 @@ const TransactionGrid: React.FC<Props> = ({
                     {visibleTransactions.map((tx) => {
                     const isExpanded = expandedId === tx.id;
                     const isDeleting = confirmDeleteId === tx.id;
-                    const catStyle = getCategoryStyle(tx.category);
                     
                     return (
                         <div key={tx.id} className="group flex flex-col hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
@@ -195,20 +202,28 @@ const TransactionGrid: React.FC<Props> = ({
                                         className={`text-gray-700 dark:text-gray-200 leading-tight transition-all ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}
                                         style={descStyle}
                                     >
-                                        {tx.description || '?'}
+                                        {tx.description}
                                     </div>
                                 </div>
 
-                                {/* Right: Category, Date, Amount (Single Line) */}
+                                {/* Right: Tags, Date, Amount */}
                                 <div className="px-2 shrink-0 flex items-center justify-end gap-1.5 sm:gap-2 text-right">
-                                    {/* Category Pill - Conditional */}
-                                    {tx.category && (
-                                        <span 
-                                            className={`px-1.5 py-0 h-4 flex items-center ${catStyle.className || ''} ${isExpanded ? '' : 'truncate max-w-[60px]'}`}
-                                            style={{ ...pillStyle, ...catStyle.style }}
-                                        >
-                                            {tx.category}
-                                        </span>
+                                    {/* Tag Pills */}
+                                    {tx.tags && tx.tags.length > 0 && (
+                                        <div className="flex gap-1 overflow-hidden max-w-[80px] sm:max-w-[120px]">
+                                            {tx.tags.map((tag, idx) => {
+                                                const style = getTagStyle(tag);
+                                                return (
+                                                    <span 
+                                                        key={idx}
+                                                        className={`px-1.5 py-0 h-4 flex items-center shrink-0 ${style.className || ''}`}
+                                                        style={{ ...pillStyle, ...style.style }}
+                                                    >
+                                                        {tag}
+                                                    </span>
+                                                );
+                                            })}
+                                        </div>
                                     )}
                                     
                                     {/* Date Pill */}

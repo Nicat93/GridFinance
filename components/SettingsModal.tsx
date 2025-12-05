@@ -105,7 +105,7 @@ const SettingsModal: React.FC<Props> = ({
                     <select 
                         value={language}
                         onChange={(e) => onLanguageChange(e.target.value as LanguageCode)}
-                        className="bg-transparent text-xs font-bold text-indigo-600 dark:text-indigo-400 focus:outline-none text-right"
+                        className="bg-transparent text-xs font-bold text-indigo-600 dark:text-indigo-400 focus:outline-none"
                     >
                         <option value="en">English</option>
                         <option value="az">Azərbaycan</option>

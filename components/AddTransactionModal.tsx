@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Frequency, TransactionType, Transaction, RecurringPlan, CategoryDef, LanguageCode } from '../types';
 import CalculatorSheet from './CalculatorSheet';
@@ -29,7 +30,11 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   const [type, setType] = useState<TransactionType>('expense');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('');
+  
+  // Tag Selection State
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+  
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   
   const [isRecurring, setIsRecurring] = useState(false);
@@ -41,9 +46,8 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   // Calculator State
   const [calcTarget, setCalcTarget] = useState<'amount' | 'maxOccurrences' | null>(null);
 
-  // Category Dropdown State
-  const [isCatDropdownOpen, setIsCatDropdownOpen] = useState(false);
-  const catInputRef = useRef<HTMLInputElement>(null);
+  // Tag Dropdown State
+  const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   
   const t = translations[language];
 
@@ -65,7 +69,8 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
         setType(initialData.type);
         setAmount(initialData.amount.toString());
         setDescription(initialData.description || '');
-        setCategory(initialData.category || '');
+        // Initialize Tags (fallback to empty if migration hasn't run yet on this specific object in memory)
+        setSelectedTags(initialData.tags || []);
         
         if ('frequency' in initialData) {
             const plan = initialData as RecurringPlan;
@@ -88,7 +93,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
         setType('expense');
         setAmount('');
         setDescription('');
-        setCategory('');
+        setSelectedTags([]);
         const today = new Date().toISOString().split('T')[0];
         setDate(today);
         setPlanStartDate(today);
@@ -97,6 +102,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
         setMaxOccurrences('');
         setIsLoan(false);
       }
+      setTagInput('');
     }
   }, [isOpen, initialData]);
 
@@ -108,7 +114,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
       description,
       amount: parseFloat(amount) || 0,
       type,
-      category,
+      tags: selectedTags,
       date, 
     };
 
@@ -150,11 +156,6 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
       }
   };
 
-  const openCategoryDropdown = () => {
-      setCategory(''); // Clear field so all options are shown
-      setIsCatDropdownOpen(true);
-  };
-
   const getColorStyle = (color: string) => {
     if (KNOWN_COLORS.includes(color)) {
         switch(color) {
@@ -184,12 +185,31 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
     }
   };
 
-  const filteredCategories = categories.filter(c => 
-    c.name.toLowerCase().includes(category.toLowerCase())
-  ).sort((a, b) => a.name.localeCompare(b.name));
+  // --- Tag Logic ---
+  const addTag = (tag: string) => {
+      const trimmed = tag.trim();
+      if (trimmed && !selectedTags.includes(trimmed)) {
+          setSelectedTags([...selectedTags, trimmed]);
+      }
+      setTagInput('');
+      setIsTagDropdownOpen(false);
+  };
 
-  const newCategoryColor = category ? pickColorForString(category) : 'gray';
-  const newCategoryStyle = getColorStyle(newCategoryColor);
+  const removeTag = (tag: string) => {
+      setSelectedTags(selectedTags.filter(t => t !== tag));
+  };
+
+  const handleTagInputKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+          e.preventDefault();
+          addTag(tagInput);
+      }
+  };
+
+  const filteredCategories = categories.filter(c => 
+    c.name.toLowerCase().includes(tagInput.toLowerCase()) &&
+    !selectedTags.includes(c.name)
+  ).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <>
@@ -199,12 +219,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
         >
         <div 
             className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 w-full max-w-sm rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
-            onClick={(e) => {
-                // IMPORTANT: This prevents clicks inside the modal content from closing the modal (the overlay click)
-                // AND it also closes the dropdown if it's open (click-outside logic for dropdown)
-                e.stopPropagation();
-                if (isCatDropdownOpen) setIsCatDropdownOpen(false);
-            }}
+            onClick={(e) => e.stopPropagation()}
         >
             <div className="p-4 border-b border-gray-100 dark:border-gray-900 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
                 <h2 className="text-gray-800 dark:text-gray-200 font-bold text-base uppercase tracking-wide">
@@ -254,45 +269,62 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                 />
             </div>
 
+            {/* Tag Selection */}
             <div className="grid grid-cols-2 gap-3">
                 <div className="relative">
+                    {/* Selected Tags Display */}
+                    {selectedTags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-2">
+                            {selectedTags.map(tag => {
+                                // Find color if exists
+                                const def = categories.find(c => c.name.toLowerCase() === tag.toLowerCase());
+                                const color = def ? def.color : pickColorForString(tag);
+                                const style = getColorStyle(color);
+                                return (
+                                    <span 
+                                        key={tag} 
+                                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-white ${style.className || ''}`}
+                                        style={style.style}
+                                    >
+                                        {tag}
+                                        <button 
+                                            type="button" 
+                                            onClick={() => removeTag(tag)}
+                                            className="hover:text-gray-200"
+                                        >✕</button>
+                                    </span>
+                                )
+                            })}
+                        </div>
+                    )}
+
                     <input 
-                        ref={catInputRef}
                         type="text" 
-                        value={category}
-                        onChange={e => setCategory(e.target.value)}
-                        onFocus={openCategoryDropdown}
-                        onClick={(e) => { 
-                            e.stopPropagation(); 
-                            // Only open if not already open to prevent immediate close via bubbling if we were toggling
-                            if (!isCatDropdownOpen) openCategoryDropdown();
-                        }}
+                        value={tagInput}
+                        onChange={e => setTagInput(e.target.value)}
+                        onFocus={() => setIsTagDropdownOpen(true)}
+                        onKeyDown={handleTagInputKeyDown}
+                        onClick={(e) => { e.stopPropagation(); setIsTagDropdownOpen(true); }}
                         className="w-full bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-400 px-3 py-2 rounded text-sm focus:border-indigo-500 focus:outline-none transition-colors"
                         placeholder={t.categoryPlaceholder}
                         autoComplete="off"
                     />
-                    <div className="absolute right-2 top-2.5 pointer-events-none text-gray-400">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                    </div>
-
-                    {isCatDropdownOpen && (
-                        <div 
-                            className="absolute z-20 left-0 right-0 mt-1 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg shadow-xl max-h-48 overflow-y-auto"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            {filteredCategories.length === 0 && category.trim() !== '' && (
+                    
+                    {isTagDropdownOpen && (
+                        <div className="absolute z-20 left-0 right-0 mt-1 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                            {tagInput.trim() !== '' && !filteredCategories.find(c => c.name.toLowerCase() === tagInput.trim().toLowerCase()) && (
                                 <div 
                                     className="p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 flex items-center gap-2"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        setIsCatDropdownOpen(false);
+                                        addTag(tagInput);
                                     }}
                                 >
-                                    <div className={`w-3 h-3 rounded-full ${newCategoryStyle.className || ''}`} style={newCategoryStyle.style}></div>
-                                    <span className="text-sm text-gray-600 dark:text-gray-300">{t.create} "<strong>{category}</strong>"</span>
+                                    <span className="text-sm text-gray-600 dark:text-gray-300 font-bold">+ {t.create} "{tagInput}"</span>
                                 </div>
                             )}
-                            {filteredCategories.length === 0 && !category.trim() && (
+                            
+                            {filteredCategories.length === 0 && !tagInput.trim() && (
                                 <div className="p-2 text-xs text-gray-400 italic text-center">{t.typeToAdd}</div>
                             )}
                             
@@ -303,8 +335,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                                     key={c.id}
                                     onClick={(e) => { 
                                         e.stopPropagation(); 
-                                        setCategory(c.name); 
-                                        setIsCatDropdownOpen(false); 
+                                        addTag(c.name);
                                     }}
                                     className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 cursor-pointer text-sm text-gray-700 dark:text-gray-300"
                                 >
@@ -324,7 +355,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                     required
                     value={date}
                     onChange={e => setDate(e.target.value)}
-                    className="bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-400 px-3 py-2 rounded text-sm focus:border-indigo-500 focus:outline-none transition-colors"
+                    className="bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-400 px-3 py-2 rounded text-sm focus:border-indigo-500 focus:outline-none transition-colors h-[38px] self-end"
                 />
             </div>
 
@@ -354,10 +385,10 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                                         onChange={(e) => handleFrequencyChange(e.target.value as Frequency)}
                                         className="w-full bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-300 p-1.5 rounded text-sm focus:outline-none"
                                     >
-                                        <option value={Frequency.ONE_TIME}>{t.freqOneTime}</option>
-                                        <option value={Frequency.WEEKLY}>{t.freqWeekly}</option>
-                                        <option value={Frequency.MONTHLY}>{t.freqMonthly}</option>
-                                        <option value={Frequency.YEARLY}>{t.freqYearly}</option>
+                                        <option value={Frequency.ONE_TIME}>One-time</option>
+                                        <option value={Frequency.WEEKLY}>Weekly</option>
+                                        <option value={Frequency.MONTHLY}>Monthly</option>
+                                        <option value={Frequency.YEARLY}>Yearly</option>
                                     </select>
                                 </div>
                                 <div>
@@ -373,7 +404,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
 
                             {/* Loan Checkbox Row - Moved Below Frequency */}
                             {!initialData && (
-                                <div className="pt-3 border-t border-gray-200 dark:border-gray-800/50 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
+                                <div className="pt-3 border-t border-gray-200 dark:border-gray-800/50 flex items-center justify-between gap-2">
                                     <label className="flex items-center gap-2 cursor-pointer group shrink-0">
                                         <input 
                                             type="checkbox" 
@@ -398,14 +429,14 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                                     </label>
 
                                     {isLoan && (
-                                        <div className="animate-in fade-in slide-in-from-right-2 flex-1 min-w-[120px] ml-auto">
+                                        <div className="animate-in fade-in slide-in-from-right-2 flex-1 max-w-[50%]">
                                             <label className="block text-[9px] text-gray-500 dark:text-gray-600 uppercase mb-0.5 text-right">{t.repaymentStart}</label>
                                             <input 
                                                 type="date" 
                                                 required
                                                 value={planStartDate}
                                                 onChange={e => setPlanStartDate(e.target.value)}
-                                                className="w-full bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-300 p-1 rounded text-xs focus:outline-none min-w-0"
+                                                className="w-full bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-300 p-1 rounded text-xs focus:outline-none"
                                             />
                                         </div>
                                     )}

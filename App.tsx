@@ -51,20 +51,27 @@ export default function App() {
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     const saved = localStorage.getItem('transactions');
     let parsed: any[] = saved ? JSON.parse(saved) : [];
+    // Data Migration: category string -> tags array AND backfill createdAt
     return parsed.map((t: any) => {
-        const desc = t.name || t.description || '';
-        const { name, ...rest } = t;
-        return { ...rest, description: desc };
+        const desc = t.name || t.description || 'Unknown';
+        const { name, category, ...rest } = t;
+        const tags = t.tags ? t.tags : (category ? [category] : []);
+        // Backfill createdAt if missing. Use lastModified or now as fallback.
+        const createdAt = t.createdAt || t.lastModified || Date.now();
+        return { ...rest, description: desc, tags, createdAt };
     });
   });
   
   const [plans, setPlans] = useState<RecurringPlan[]>(() => {
     const saved = localStorage.getItem('plans');
     let parsed: any[] = saved ? JSON.parse(saved) : [];
+    // Data Migration: category string -> tags array AND backfill createdAt
     return parsed.map((p: any) => {
-        const desc = p.name || p.description || '';
-        const { name, ...rest } = p;
-        return { ...rest, description: desc };
+        const desc = p.name || p.description || 'Unknown';
+        const { name, category, ...rest } = p;
+        const tags = p.tags ? p.tags : (category ? [category] : []);
+        const createdAt = p.createdAt || p.lastModified || Date.now();
+        return { ...rest, description: desc, tags, createdAt };
     });
   });
 
@@ -78,7 +85,7 @@ export default function App() {
       return saved ? JSON.parse(saved) : {};
   });
 
-  // Persistent Category Definitions
+  // Persistent Category/Tag Definitions
   const [categoryDefs, setCategoryDefs] = useState<CategoryDef[]>(() => {
       const saved = localStorage.getItem('categoryDefs');
       if (saved) return JSON.parse(saved);
@@ -96,7 +103,7 @@ export default function App() {
                   id: Math.random().toString(36).substr(2, 9),
                   name: name,
                   color: colors[Math.floor(Math.random() * colors.length)],
-                  lastModified: now // Important for sync
+                  lastModified: now 
               });
           });
       }
@@ -179,9 +186,9 @@ export default function App() {
   // --- Effect: Harvest Categories from History/Plans ---
   // Runs whenever transactions or plans change (including after a sync)
   useEffect(() => {
-    const usedCategories = new Set<string>();
-    transactions.forEach(t => t.category && usedCategories.add(t.category));
-    plans.forEach(p => p.category && usedCategories.add(p.category));
+    const usedTags = new Set<string>();
+    transactions.forEach(t => t.tags && t.tags.forEach(tag => usedTags.add(tag)));
+    plans.forEach(p => p.tags && p.tags.forEach(tag => usedTags.add(tag)));
 
     setCategoryDefs(prev => {
         const newDefs = [...prev];
@@ -189,8 +196,8 @@ export default function App() {
         const colors = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
         const now = Date.now();
 
-        usedCategories.forEach(catName => {
-            const normalized = catName.trim();
+        usedTags.forEach(tagName => {
+            const normalized = tagName.trim();
             if (!normalized) return;
             
             // Check if exists (case insensitive)
@@ -199,7 +206,7 @@ export default function App() {
                     id: Math.random().toString(36).substr(2, 9),
                     name: normalized,
                     color: colors[Math.floor(Math.random() * colors.length)],
-                    lastModified: now // Important for sync
+                    lastModified: now
                 });
                 changed = true;
             }
@@ -418,9 +425,10 @@ export default function App() {
               description: desc,
               amount: parseFloat((Math.random() * 1000).toFixed(2)),
               type: type,
-              category: cat,
+              tags: [cat],
               isPaid: true,
-              lastModified: now
+              lastModified: now,
+              createdAt: now - Math.floor(Math.random() * 100000)
           });
           newPlans.push({
               id: generateId(),
@@ -430,9 +438,10 @@ export default function App() {
               frequency: Frequency.MONTHLY,
               startDate: new Date(Date.now() + Math.random() * 31536000000).toISOString().split('T')[0],
               occurrencesGenerated: 0,
-              category: cat,
+              tags: [cat],
               maxOccurrences: Math.random() > 0.8 ? 12 : undefined,
-              lastModified: now
+              lastModified: now,
+              createdAt: now - Math.floor(Math.random() * 100000)
           });
       }
       setTransactions(prev => [...prev, ...newTxs]);
@@ -469,14 +478,19 @@ export default function App() {
         if (window.confirm(`Found ${data.transactions.length} transactions and ${data.plans.length} plans. This will OVERWRITE your current local data. Continue?`)) {
             const now = Date.now();
             const importedTx = data.transactions.map((t: any) => {
-                 const desc = t.name || t.description || '';
-                 const { name, ...rest } = t;
-                 return { ...rest, description: desc };
+                 const desc = t.name || t.description || 'Unknown';
+                 const { name, category, ...rest } = t;
+                 const tags = t.tags ? t.tags : (category ? [category] : []);
+                 // Preserve createdAt or backfill
+                 const createdAt = t.createdAt || t.lastModified || now;
+                 return { ...rest, description: desc, tags, createdAt };
             });
              const importedPlans = data.plans.map((p: any) => {
-                 const desc = p.name || p.description || '';
-                 const { name, ...rest } = p;
-                 return { ...rest, description: desc };
+                 const desc = p.name || p.description || 'Unknown';
+                 const { name, category, ...rest } = p;
+                 const tags = p.tags ? p.tags : (category ? [category] : []);
+                 const createdAt = p.createdAt || p.lastModified || now;
+                 return { ...rest, description: desc, tags, createdAt };
             });
 
             if (data.categoryDefs && Array.isArray(data.categoryDefs)) {
@@ -519,20 +533,31 @@ export default function App() {
 
   const handleSaveData = (data: any) => {
     const now = Date.now();
-    const finalDescription = data.description?.trim() || '';
-    // Allow empty category string
-    const finalCategory = data.category ? data.category.trim() : '';
+    const finalDescription = data.description?.trim() || 'Unknown';
+    // Expecting data.tags as string[]
+    const finalTags: string[] = Array.isArray(data.tags) ? data.tags : [];
 
     // Auto-create category if new (Fallback behavior, user can manage later)
-    if (finalCategory && !categoryDefs.find(c => c.name.toLowerCase() === finalCategory.toLowerCase())) {
-        const colors = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
-        const newDef: CategoryDef = {
-            id: generateId(),
-            name: finalCategory,
-            color: data.newCategoryColor || colors[Math.floor(Math.random() * colors.length)],
-            lastModified: now
-        };
-        setCategoryDefs(prev => [...prev, newDef]);
+    // Scan new tags, if not in categoryDefs, add them
+    if (finalTags.length > 0) {
+        setCategoryDefs(prev => {
+            const newDefs = [...prev];
+            let changed = false;
+            const colors = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
+
+            finalTags.forEach(tagName => {
+                 if (!newDefs.some(c => c.name.toLowerCase() === tagName.toLowerCase())) {
+                    newDefs.push({
+                        id: generateId(),
+                        name: tagName,
+                        color: colors[Math.floor(Math.random() * colors.length)],
+                        lastModified: now
+                    });
+                    changed = true;
+                }
+            });
+            return changed ? newDefs : prev;
+        });
     }
 
     if (editingItem) {
@@ -540,15 +565,19 @@ export default function App() {
         if (isPlan) {
              const updatedPlan = {
                 ...editingItem,
-                description: finalDescription, amount: data.amount, type: data.type, category: finalCategory,
+                description: finalDescription, amount: data.amount, type: data.type, tags: finalTags,
                 startDate: data.date, frequency: data.frequency, maxOccurrences: data.maxOccurrences,
+                // Preserve original createdAt
+                createdAt: editingItem.createdAt || now,
                 lastModified: now
             } as RecurringPlan;
             setPlans(prev => prev.map(p => p.id === editingItem.id ? updatedPlan : p));
         } else {
             const updatedTx = {
                 ...editingItem,
-                description: finalDescription, amount: data.amount, type: data.type, category: finalCategory, date: data.date,
+                description: finalDescription, amount: data.amount, type: data.type, tags: finalTags, date: data.date,
+                // Preserve original createdAt
+                createdAt: editingItem.createdAt || now,
                 lastModified: now
             } as Transaction;
             setTransactions(prev => prev.map(t => t.id === editingItem.id ? updatedTx : t));
@@ -558,46 +587,40 @@ export default function App() {
         if (data.kind === 'single') {
             const newTx: Transaction = {
                 id: generateId(), date: data.date, description: finalDescription, amount: data.amount,
-                type: data.type, category: finalCategory, isPaid: true, lastModified: now
+                type: data.type, tags: finalTags, isPaid: true, 
+                createdAt: now,
+                lastModified: now
             };
             setTransactions(prev => [newTx, ...prev]);
         } else if (data.kind === 'plan') {
             const count = data.maxOccurrences || 1;
-            // If it's a loan, the input amount is the Total, so the plan amount (monthly) is Total / Count.
-            // If it's not a loan, the input amount is the Monthly amount.
             const finalPlanAmount = data.isLoan ? (data.amount / count) : data.amount;
-
-            // For loans, use the specified start date. For regular plans, use the transaction date.
             const finalPlanStartDate = data.isLoan ? (data.planStartDate || data.date) : data.date;
 
             const newPlan: RecurringPlan = {
                 id: generateId(), description: finalDescription, 
                 amount: finalPlanAmount, 
                 type: data.type,
-                frequency: data.frequency, startDate: finalPlanStartDate, occurrencesGenerated: 0, category: finalCategory,
+                frequency: data.frequency, startDate: finalPlanStartDate, occurrencesGenerated: 0, tags: finalTags,
                 maxOccurrences: data.maxOccurrences, 
+                createdAt: now,
                 lastModified: now
             };
             setPlans(prev => [...prev, newPlan]);
 
-            // Handle Loan Logic: Create immediate transaction for total amount
             if (data.isLoan) {
-                // User entered Total in the amount field, so use it directly
                 const totalAmount = data.amount;
-                // Loan transaction usually implies receiving money (if it's a loan taken) or spending money (loan given)
-                // If I am taking a loan, I get INCOME (cash). Repayments are EXPENSE.
-                // If I create a PLAN for EXPENSE (repayment), then the initial TX is INCOME.
-                // If I create a PLAN for INCOME (I am being repaid), then initial TX is EXPENSE (I gave money).
                 const reverseType = data.type === 'expense' ? 'income' : 'expense';
                 
                 const principalTx: Transaction = {
                     id: generateId(),
-                    date: data.date, // Transaction happens "now"
+                    date: data.date, 
                     description: `Loan Principal: ${finalDescription}`,
                     amount: totalAmount,
                     type: reverseType,
-                    category: finalCategory,
+                    tags: finalTags,
                     isPaid: true,
+                    createdAt: now,
                     lastModified: now
                 };
                 setTransactions(prev => [principalTx, ...prev]);
@@ -614,7 +637,9 @@ export default function App() {
     
     const newTx: Transaction = {
         id: generateId(), date: dateStr, description: plan.description,
-        amount: plan.amount, type: plan.type, category: plan.category, isPaid: false, relatedPlanId: plan.id, lastModified: now
+        amount: plan.amount, type: plan.type, tags: plan.tags, isPaid: false, relatedPlanId: plan.id, 
+        createdAt: now,
+        lastModified: now
     };
     setTransactions(prev => [newTx, ...prev]);
     
@@ -679,7 +704,8 @@ export default function App() {
                   const newDateStr = targetDate.getFullYear() + '-' + String(targetDate.getMonth() + 1).padStart(2, '0') + '-' + String(targetDate.getDate()).padStart(2, '0');
                   const newPlan: RecurringPlan = {
                       id: generateId(), description: plan.description, amount: plan.amount, type: plan.type,
-                      frequency: Frequency.ONE_TIME, startDate: newDateStr, occurrencesGenerated: 0, category: plan.category,
+                      frequency: Frequency.ONE_TIME, startDate: newDateStr, occurrencesGenerated: 0, tags: plan.tags,
+                      createdAt: now,
                       lastModified: now
                   };
                   setPlans(prev => [...prev, newPlan]);
@@ -804,7 +830,7 @@ export default function App() {
           className="fixed bottom-6 left-6 w-10 h-10 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-105 active:scale-95 z-40 border border-gray-300 dark:border-gray-700"
           title={t.settings}
       >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 11-6 0 3 3 0 016 0z" /></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
       </button>
 
       {syncStatus !== 'offline' && (

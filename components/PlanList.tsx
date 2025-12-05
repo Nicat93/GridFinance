@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { RecurringPlan, Frequency, SortOption, CategoryDef, LanguageCode } from '../types';
 import { DesignConfig } from './DesignDebugger';
@@ -59,7 +60,7 @@ const PlanList: React.FC<Props> = ({
         const lower = filterText.toLowerCase();
         result = result.filter(p => 
             p.description.toLowerCase().includes(lower) || 
-            (p.category && p.category.toLowerCase().includes(lower))
+            (p.tags && p.tags.some(tag => tag.toLowerCase().includes(lower)))
         );
     }
 
@@ -89,7 +90,9 @@ const PlanList: React.FC<Props> = ({
             case 'amount_desc':
                 return b.amount - a.amount;
             case 'category':
-                return a.category.localeCompare(b.category);
+                const tagA = a.tags && a.tags.length > 0 ? a.tags[0] : '';
+                const tagB = b.tags && b.tags.length > 0 ? b.tags[0] : '';
+                return tagA.localeCompare(tagB);
             case 'date_asc':
             case 'date_desc': 
             default:
@@ -104,7 +107,8 @@ const PlanList: React.FC<Props> = ({
                     if (dateDiff !== 0) return dateDiff;
                 }
                 
-                return (b.lastModified || 0) - (a.lastModified || 0);
+                // Stable sort by creation time (Newer first)
+                return (b.createdAt || 0) - (a.createdAt || 0);
         }
     });
 
@@ -132,8 +136,8 @@ const PlanList: React.FC<Props> = ({
       return `${date.getMonth() + 1}-${date.getDate()}`;
   };
 
-  const getCategoryStyle = (catName: string): { className: string, style?: React.CSSProperties } => {
-      const def = categories.find(c => c.name.toLowerCase() === catName.toLowerCase());
+  const getTagStyle = (tagName: string): { className: string, style?: React.CSSProperties } => {
+      const def = categories.find(c => c.name.toLowerCase() === tagName.toLowerCase());
       const color = def ? def.color : 'gray';
       
       if (KNOWN_COLORS.includes(color)) {
@@ -215,8 +219,7 @@ const PlanList: React.FC<Props> = ({
                         const isFuture = nextDate >= today;
                         const isMaxed = plan.maxOccurrences ? plan.occurrencesGenerated >= plan.maxOccurrences : false;
                         const canApply = !isMaxed;
-                        const catStyle = getCategoryStyle(plan.category);
-
+                        
                         // Status Logic
                         const isLate = nextDate < today;
                         const isUpcomingInPeriod = nextDate >= today && nextDate <= periodEnd;
@@ -248,21 +251,29 @@ const PlanList: React.FC<Props> = ({
                                                 className={`text-gray-700 dark:text-gray-200 leading-tight transition-all ${isExpanded ? 'whitespace-normal break-words' : 'truncate'}`}
                                                 style={descStyle}
                                             >
-                                                {plan.description || '?'}
+                                                {plan.description}
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* Right: Category, Date, Amount */}
+                                    {/* Right: Tags, Date, Amount */}
                                     <div className="px-2 shrink-0 flex items-center justify-end gap-1.5 sm:gap-2 text-right">
-                                        {/* Category Pill - Conditional */}
-                                        {plan.category && (
-                                            <span 
-                                                className={`px-1.5 py-0 h-4 flex items-center ${catStyle.className || ''} ${isExpanded ? '' : 'truncate max-w-[60px]'}`}
-                                                style={{ ...pillStyle, ...catStyle.style }}
-                                            >
-                                                {plan.category}
-                                            </span>
+                                        {/* Tag Pills */}
+                                        {plan.tags && plan.tags.length > 0 && (
+                                            <div className="flex gap-1 overflow-hidden max-w-[80px] sm:max-w-[120px]">
+                                                {plan.tags.map((tag, idx) => {
+                                                    const style = getTagStyle(tag);
+                                                    return (
+                                                        <span 
+                                                            key={idx}
+                                                            className={`px-1.5 py-0 h-4 flex items-center shrink-0 ${style.className || ''}`}
+                                                            style={{ ...pillStyle, ...style.style }}
+                                                        >
+                                                            {tag}
+                                                        </span>
+                                                    );
+                                                })}
+                                            </div>
                                         )}
 
                                         {/* Date Pill */}

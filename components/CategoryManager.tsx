@@ -1,14 +1,13 @@
 
+
 import React, { useState, useEffect } from 'react';
-import { CategoryDef, LanguageCode } from '../types';
-import { translations } from '../translations';
+import { CategoryDef } from '../types';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   categories: CategoryDef[];
   onSave: (categories: CategoryDef[]) => void;
-  language: LanguageCode;
 }
 
 const AVAILABLE_COLORS = [
@@ -17,12 +16,10 @@ const AVAILABLE_COLORS = [
   'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'
 ];
 
-const CategoryManager: React.FC<Props> = ({ isOpen, onClose, categories, onSave, language }) => {
+const CategoryManager: React.FC<Props> = ({ isOpen, onClose, categories, onSave }) => {
   const [localCategories, setLocalCategories] = useState<CategoryDef[]>([]);
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState('gray');
-  
-  const t = translations[language];
 
   useEffect(() => {
     if (isOpen) {
@@ -41,7 +38,7 @@ const CategoryManager: React.FC<Props> = ({ isOpen, onClose, categories, onSave,
     if (!newName.trim()) return;
     
     if (localCategories.some(c => c.name.toLowerCase() === newName.trim().toLowerCase())) {
-        alert('Category already exists');
+        alert('Tag already exists');
         return;
     }
 
@@ -63,7 +60,7 @@ const CategoryManager: React.FC<Props> = ({ isOpen, onClose, categories, onSave,
   };
 
   const handleDelete = (id: string) => {
-      if (window.confirm('Delete this category? Transactions using it will keep the text name but lose the color.')) {
+      if (window.confirm('Delete this tag? Transactions using it will keep the text name but lose the color.')) {
           const updated = localCategories.filter(c => c.id !== id);
           setLocalCategories(updated);
           onSave(updated);
@@ -119,7 +116,7 @@ const CategoryManager: React.FC<Props> = ({ isOpen, onClose, categories, onSave,
         
         {/* Header */}
         <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
-            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200">{t.manageCategories}</h2>
+            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200">Tags</h2>
             <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:hover:text-white">✕</button>
         </div>
 
@@ -127,7 +124,7 @@ const CategoryManager: React.FC<Props> = ({ isOpen, onClose, categories, onSave,
         <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
             {localCategories.length === 0 && (
                 <div className="p-4 text-center text-gray-400 text-xs italic">
-                    {t.noMatches}
+                    No tags defined.
                 </div>
             )}
             {localCategories.map(cat => {
@@ -181,7 +178,7 @@ const CategoryManager: React.FC<Props> = ({ isOpen, onClose, categories, onSave,
                     type="text" 
                     value={newName}
                     onChange={e => setNewName(e.target.value)}
-                    placeholder={`${t.categoryPlaceholder}...`}
+                    placeholder="New Tag Name..."
                     className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 font-bold"
                 />
                 
@@ -200,7 +197,7 @@ const CategoryManager: React.FC<Props> = ({ isOpen, onClose, categories, onSave,
                         )
                     })}
                      <div className="relative w-5 h-5 rounded-full border border-gray-300 dark:border-gray-700 flex items-center justify-center cursor-pointer bg-white dark:bg-gray-800">
-                        <span className="text-[8px] text-gray-500">{t.details}</span>
+                        <span className="text-[8px] text-gray-500">More</span>
                         <input 
                             type="color"
                             value={newColor.startsWith('#') ? newColor : '#808080'}
@@ -215,7 +212,7 @@ const CategoryManager: React.FC<Props> = ({ isOpen, onClose, categories, onSave,
                     disabled={!newName.trim()}
                     className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:bg-gray-400 text-white py-2 rounded-lg font-bold text-sm shadow-md transition-colors"
                 >
-                    {t.create}
+                    Add
                 </button>
             </div>
         </form>

@@ -1,4 +1,5 @@
 
+
 export type TransactionType = 'income' | 'expense';
 
 export enum Frequency {
@@ -33,12 +34,14 @@ export interface Transaction {
   amount: number;
   /** Income or Expense */
   type: TransactionType;
-  /** Category tag (e.g., 'Food', 'Rent') */
-  category: string;
+  /** Tags (formerly categories) */
+  tags: string[];
   /** Tracks if the transaction has been marked as paid/cleared */
   isPaid: boolean;
   /** Links this transaction to a RecurringPlan if generated from one */
   relatedPlanId?: string;
+  /** Timestamp of creation for stable sorting */
+  createdAt: number;
   /** Timestamp for sync conflict resolution (Last-Write-Wins) */
   lastModified?: number;
 }
@@ -60,7 +63,9 @@ export interface RecurringPlan {
   maxOccurrences?: number;
   /** Counter of how many real Transactions have been created from this plan */
   occurrencesGenerated: number;
-  category: string;
+  tags: string[];
+  /** Timestamp of creation for stable sorting */
+  createdAt: number;
   /** Timestamp for sync conflict resolution */
   lastModified?: number;
 }

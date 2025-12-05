@@ -1,7 +1,5 @@
-
 import React, { useEffect } from 'react';
-import { RecurringPlan, Frequency, LanguageCode } from '../types';
-import { translations } from '../translations';
+import { RecurringPlan, Frequency } from '../types';
 
 interface Props {
   isOpen: boolean;
@@ -10,7 +8,6 @@ interface Props {
   onResolve: (planId: string, action: 'move' | 'paid' | 'cancel') => void;
   onContinue: () => void;
   onCancel: () => void;
-  language: LanguageCode;
 }
 
 const PeriodTransitionModal: React.FC<Props> = ({ 
@@ -19,11 +16,8 @@ const PeriodTransitionModal: React.FC<Props> = ({
     pendingPlans, 
     onResolve, 
     onContinue, 
-    onCancel,
-    language
+    onCancel 
 }) => {
-  const t = translations[language];
-
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -51,7 +45,7 @@ const PeriodTransitionModal: React.FC<Props> = ({
         
         {/* Header */}
         <div className="p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
-            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200">{t.unresolvedItems}</h2>
+            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200">Unresolved Items</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 The following items from the previous period were not marked as paid.
             </p>
@@ -68,13 +62,13 @@ const PeriodTransitionModal: React.FC<Props> = ({
                     <div key={plan.id} className="p-4 flex flex-col gap-3 hover:bg-gray-50 dark:hover:bg-gray-900/20 transition-colors">
                         <div className="flex justify-between items-start">
                             <div>
-                                <div className="font-bold text-sm text-gray-800 dark:text-gray-200">{plan.description || '?'}</div>
+                                <div className="font-bold text-sm text-gray-800 dark:text-gray-200">{plan.description}</div>
                                 <div className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">
-                                    Due: {formatDate(due)} • {plan.category}
+                                    Due: {formatDate(due)} • {plan.tags.join(', ')}
                                 </div>
                             </div>
                             <div className={`font-mono font-bold text-sm ${plan.type === 'expense' ? 'text-rose-600 dark:text-rose-500' : 'text-emerald-600 dark:text-emerald-500'}`}>
-                                {plan.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {plan.amount.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
                             </div>
                         </div>
                         
@@ -83,15 +77,15 @@ const PeriodTransitionModal: React.FC<Props> = ({
                                 onClick={() => onResolve(plan.id, 'move')}
                                 className="px-2 py-2 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded text-xs font-bold border border-indigo-100 dark:border-indigo-900/30 transition-colors flex flex-col items-center gap-1"
                             >
-                                <span>{t.move} ➝</span>
-                                <span className="text-[9px] font-normal opacity-70">{t.move} {formatDate(targetDate)}</span>
+                                <span>Move ➝</span>
+                                <span className="text-[9px] font-normal opacity-70">to {formatDate(targetDate)}</span>
                             </button>
                             
                             <button 
                                 onClick={() => onResolve(plan.id, 'paid')}
                                 className="px-2 py-2 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded text-xs font-bold border border-emerald-100 dark:border-emerald-900/30 transition-colors flex flex-col items-center gap-1"
                             >
-                                <span>{t.paid} ✓</span>
+                                <span>Paid ✓</span>
                                 <span className="text-[9px] font-normal opacity-70">on {formatDate(due)}</span>
                             </button>
 
@@ -99,8 +93,8 @@ const PeriodTransitionModal: React.FC<Props> = ({
                                 onClick={() => onResolve(plan.id, 'cancel')}
                                 className="px-2 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 rounded text-xs font-bold border border-gray-200 dark:border-gray-700 transition-colors flex flex-col items-center gap-1"
                             >
-                                <span>{t.cancel} ✕</span>
-                                <span className="text-[9px] font-normal opacity-70">{t.skip}</span>
+                                <span>Cancel ✕</span>
+                                <span className="text-[9px] font-normal opacity-70">Skip this</span>
                             </button>
                         </div>
                     </div>
@@ -114,13 +108,13 @@ const PeriodTransitionModal: React.FC<Props> = ({
                 onClick={onCancel}
                 className="flex-1 py-2.5 rounded text-sm font-medium text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
             >
-                {t.cancel}
+                Cancel Change
             </button>
             <button 
                 onClick={onContinue}
                 className="flex-1 bg-gray-900 dark:bg-gray-100 hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-gray-900 py-2.5 rounded text-sm font-bold shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-                {pendingPlans.length === 0 ? t.finish : t.ignoreRemaining}
+                {pendingPlans.length === 0 ? 'Finish' : 'Ignore Remaining'}
             </button>
         </div>
       </div>
