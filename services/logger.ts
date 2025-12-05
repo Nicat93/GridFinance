@@ -1,7 +1,5 @@
 
 
-
-
 export type LogLevel = 'info' | 'warn' | 'error' | 'log';
 
 export interface LogEntry {
@@ -52,8 +50,12 @@ class LoggerService {
       }
       if (typeof arg === 'object') {
         try {
-            // Simple truncation for objects to save space
+            // Check if it looks like an error but failed instanceof (e.g. from iframe or different context)
+            // or if it stringifies to empty object (common for Errors)
             const str = JSON.stringify(arg);
+            if (str === '{}' && (arg.message || arg.name)) {
+                 return `${arg.name || 'Error'}: ${arg.message}\n${arg.stack || ''}`;
+            }
             return str.length > 300 ? str.substring(0, 300) + '...' : str;
         } catch (e) {
           return '[Object]';
