@@ -24,6 +24,62 @@ export const initSupabase = (url: string, key: string) => {
     supabase = createClient(url, key);
 };
 
+// Helper: Get estimated size of payload in bytes
+const getPayloadSize = (data: any) => {
+    try {
+        return new Blob([JSON.stringify(data)]).size;
+    } catch (e) {
+        return 0;
+    }
+};
+
+// Helper: Fetch all rows with pagination to bypass 1000 row limit
+const fetchAll = async (table: string, syncId: string, minTime: number): Promise<DBRow[]> => {
+    if (!supabase) return [];
+    
+    let allRows: DBRow[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+        const from = page * pageSize;
+        const to = from + pageSize - 1;
+
+        const { data, error } = await supabase
+            .from(table)
+            .select('*')
+            .eq('sync_id', syncId)
+            .gt('updated_at', minTime)
+            .range(from, to);
+            
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+            allRows = allRows.concat(data as DBRow[]);
+            if (data.length < pageSize) {
+                hasMore = false;
+            } else {
+                page++;
+            }
+        } else {
+            hasMore = false;
+        }
+    }
+    return allRows;
+};
+
+// Helper: Batch Upsert to avoid payload size limits
+const batchUpsert = async (table: string, rows: any[]) => {
+    if (!rows.length) return;
+    const BATCH_SIZE = 200; 
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+        const chunk = rows.slice(i, i + BATCH_SIZE);
+        const { error } = await supabase.from(table).upsert(chunk);
+        if (error) throw error;
+    }
+};
+
 /**
  * PULL: Fetches only items that have changed since the last sync.
  */
@@ -34,36 +90,16 @@ export const pullChanges = async (config: SyncConfig, lastSyncedAt: number) => {
     const bufferedTimestamp = Math.max(0, lastSyncedAt - 300000);
 
     try {
-        // 1. Fetch changed Transactions
-        const { data: txRows, error: txError } = await supabase
-            .from('grid_transactions')
-            .select('*')
-            .eq('sync_id', config.syncId)
-            .gt('updated_at', bufferedTimestamp);
+        // 1. Fetch changed Transactions (with pagination)
+        const txRows = await fetchAll('grid_transactions', config.syncId, bufferedTimestamp);
 
-        if (txError) throw txError;
-
-        // 2. Fetch changed Plans
-        const { data: planRows, error: planError } = await supabase
-            .from('grid_plans')
-            .select('*')
-            .eq('sync_id', config.syncId)
-            .gt('updated_at', bufferedTimestamp);
-            
-        if (planError) throw planError;
+        // 2. Fetch changed Plans (with pagination)
+        const planRows = await fetchAll('grid_plans', config.syncId, bufferedTimestamp);
         
-        // 3. Fetch changed Categories
-        const { data: catRows, error: catError } = await supabase
-            .from('grid_categories')
-            .select('*')
-            .eq('sync_id', config.syncId)
-            .gt('updated_at', bufferedTimestamp);
-            
-        // If table doesn't exist yet, we might get an error. We can optionally ignore or log it.
-        // For now, throw to trigger fallback logging in catch block if it's a real issue.
-        if (catError && !catError.message.includes('does not exist')) throw catError;
+        // 3. Fetch changed Categories (with pagination)
+        const catRows = await fetchAll('grid_categories', config.syncId, bufferedTimestamp);
 
-        // 4. Fetch Metadata (Cycle Start Day) - Only if changed
+        // 4. Fetch Metadata (Cycle Start Day)
         const { data: metaRow, error: metaError } = await supabase
             .from('grid_metadata')
             .select('*')
@@ -72,11 +108,15 @@ export const pullChanges = async (config: SyncConfig, lastSyncedAt: number) => {
 
         if (metaError) throw metaError;
 
+        // Calculate download size
+        const downloadSizeBytes = getPayloadSize(txRows) + getPayloadSize(planRows) + getPayloadSize(catRows) + (metaRow ? getPayloadSize(metaRow) : 0);
+
         return {
-            transactions: txRows as DBRow[],
-            plans: planRows as DBRow[],
-            categories: (catRows || []) as DBRow[],
-            metadata: metaRow as { cycle_start_day: number, updated_at: number } | null
+            transactions: txRows,
+            plans: planRows,
+            categories: catRows,
+            metadata: metaRow as { cycle_start_day: number, updated_at: number } | null,
+            downloadSizeBytes
         };
 
     } catch (e: any) {
@@ -99,8 +139,8 @@ export const pushChanges = async (
     deletedIds: { [id: string]: number },
     cycleStartDay: number,
     lastSyncedAt: number
-): Promise<boolean> => {
-    if (!supabase || !config.syncId) return false;
+): Promise<{ success: boolean, uploadSizeBytes: number }> => {
+    if (!supabase || !config.syncId) return { success: false, uploadSizeBytes: 0 };
 
     // Identify Changed Items (Created/Modified AFTER lastSyncedAt)
     
@@ -164,43 +204,40 @@ export const pushChanges = async (
             deleted: false
         }));
     
-    // Note: We don't currently strictly "delete" categories with tombstones in the UI, 
-    // but if we did, we'd handle it here.
+    // Calculate Upload Size
+    let uploadSizeBytes = 0;
+    uploadSizeBytes += getPayloadSize(txUpserts);
+    uploadSizeBytes += getPayloadSize(planUpserts);
+    uploadSizeBytes += getPayloadSize(planDeletes);
+    uploadSizeBytes += getPayloadSize(catUpserts);
 
     try {
-        // Bulk Upsert Transactions
-        if (txUpserts.length > 0) {
-            const { error } = await supabase.from('grid_transactions').upsert(txUpserts);
-            if (error) throw error;
-        }
+        // Bulk Upsert Transactions (Batched)
+        await batchUpsert('grid_transactions', txUpserts);
 
-        // Bulk Upsert Plans
-        const allPlanUpserts = [...planUpserts, ...planDeletes];
-        if (allPlanUpserts.length > 0) {
-            const { error } = await supabase.from('grid_plans').upsert(allPlanUpserts);
-            if (error) throw error;
-        }
+        // Bulk Upsert Plans (Batched)
+        await batchUpsert('grid_plans', [...planUpserts, ...planDeletes]);
 
-        // Bulk Upsert Categories
-        if (catUpserts.length > 0) {
-            const { error } = await supabase.from('grid_categories').upsert(catUpserts);
-            if (error) throw error;
-        }
+        // Bulk Upsert Categories (Batched)
+        await batchUpsert('grid_categories', catUpserts);
 
         // 4. Upsert Metadata (only if changed)
         if (txUpserts.length > 0 || planUpserts.length > 0) {
-             const { error } = await supabase.from('grid_metadata').upsert({
+             const metaPayload = {
                 sync_id: config.syncId,
                 cycle_start_day: cycleStartDay,
                 updated_at: Date.now()
-             });
+             };
+             uploadSizeBytes += getPayloadSize(metaPayload);
+             
+             const { error } = await supabase.from('grid_metadata').upsert(metaPayload);
              if (error) throw error;
         }
 
-        return true;
+        return { success: true, uploadSizeBytes };
     } catch (e: any) {
         console.error("Sync Push Error:", e.message);
-        return false;
+        return { success: false, uploadSizeBytes: 0 };
     }
 };
 
@@ -270,7 +307,3 @@ export const mergeDeltas = (
         lastModified: Date.now()
     };
 };
-
-export const mergeData = (l: any, r: any) => l; 
-export const fetchRemoteData = async (c: any) => null;
-export const pushRemoteData = async (c: any, d: any) => false;

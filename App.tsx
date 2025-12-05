@@ -163,6 +163,7 @@ export default function App() {
   const [isClearDataConfirmOpen, setIsClearDataConfirmOpen] = useState(false);
 
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('offline');
+  const [syncStats, setSyncStats] = useState<{ up: number, down: number } | null>(null);
   const syncTimeoutRef = useRef<number | null>(null);
   const isSyncingRef = useRef(false);
   const isFirstMount = useRef(true);
@@ -229,10 +230,14 @@ export default function App() {
       
       isSyncingRef.current = true;
       setSyncStatus('syncing');
+      setSyncStats(null);
       
       const currentLocalState = stateRef.current;
       const lastSyncedAt = currentConfig.lastSyncedAt || 0;
       const syncStartTime = Date.now();
+      
+      let downSize = 0;
+      let upSize = 0;
 
       try {
           // 1. PULL
@@ -245,6 +250,7 @@ export default function App() {
           let mergedCycleDay = currentLocalState.cycleStartDay;
 
           if (remoteChanges) {
+              downSize = remoteChanges.downloadSizeBytes || 0;
               const merged = SupabaseService.mergeDeltas(
                   { 
                       transactions: currentLocalState.transactions, 
@@ -280,7 +286,7 @@ export default function App() {
 
           // 2. PUSH
           // Use merged data (or current if no merge) for push to ensure we are up to date
-          const success = await SupabaseService.pushChanges(
+          const { success, uploadSizeBytes } = await SupabaseService.pushChanges(
               currentConfig, 
               mergedTransactions, 
               mergedPlans, 
@@ -290,9 +296,12 @@ export default function App() {
               lastSyncedAt
           );
           
+          upSize = uploadSizeBytes;
+          
           if (success) {
             setSyncStatus('synced');
             setSyncConfig(prev => ({ ...prev, lastSyncedAt: syncStartTime }));
+            setSyncStats({ up: upSize, down: downSize });
           } else {
             setSyncStatus('error');
           }
@@ -836,7 +845,11 @@ export default function App() {
       {syncStatus !== 'offline' && (
         <div className="fixed bottom-2 left-6 z-50 flex items-center gap-1.5">
              <div className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'synced' ? 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]' : syncStatus === 'syncing' ? 'bg-indigo-500 animate-pulse' : 'bg-rose-500'}`}></div>
-             <span className="text-[9px] text-gray-400 dark:text-gray-600 font-bold tracking-wider">{syncStatus === 'synced' ? 'SYNCED' : syncStatus === 'syncing' ? 'SYNCING...' : 'ERROR'}</span>
+             <span className="text-[9px] text-gray-400 dark:text-gray-600 font-bold tracking-wider">
+                {syncStatus === 'synced' 
+                    ? (syncStats ? `SYNCED (↑${(syncStats.up/1024).toFixed(1)}KB ↓${(syncStats.down/1024).toFixed(1)}KB)` : 'SYNCED') 
+                    : syncStatus === 'syncing' ? 'SYNCING...' : 'ERROR'}
+             </span>
         </div>
       )}
 

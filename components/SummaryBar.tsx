@@ -14,7 +14,8 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus, langu
   const dateInputRef = useRef<HTMLInputElement>(null);
   const t = translations[language];
 
-  const formatMoney = (n: number) => n.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+  // Modified to remove currency symbol
+  const formatMoney = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const formatDate = (d: Date) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   
   const toInputDate = (d: Date) => {

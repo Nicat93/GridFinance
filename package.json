@@ -1,10 +1,8 @@
 
-
-
 {
   "name": "grid-finance",
   "private": true,
-  "version": "0.0.64",
+  "version": "0.0.66",
   "type": "module",
   "homepage": "https://nicat93.github.io/GridFinance",
   "scripts": {
