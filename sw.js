@@ -3,9 +3,9 @@
 
 
 
+
 const CACHE_NAME = 'grid-finance-v65';
 const CORE_ASSETS = [
-  './',
   './index.html',
   './manifest.json',
   './icon.svg',

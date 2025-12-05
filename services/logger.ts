@@ -45,20 +45,47 @@ class LoggerService {
 
   private addLog(level: LogLevel, args: any[]) {
     const messages = args.map(arg => {
-      if (arg instanceof Error || (arg && typeof arg === 'object' && arg.message && arg.name)) {
+      if (arg === undefined) return 'undefined';
+      if (arg === null) return 'null';
+
+      // 1. Handle standard Error objects
+      if (arg instanceof Error) {
           return `${arg.name}: ${arg.message}\n${arg.stack || ''}`;
       }
+      
+      // 2. Handle Objects (including Error-like objects from other contexts)
       if (typeof arg === 'object') {
         try {
-            // Check if it looks like an error but failed instanceof (e.g. from iframe or different context)
-            // or if it stringifies to empty object (common for Errors)
-            const str = JSON.stringify(arg);
-            if (str === '{}' && (arg.message || arg.name)) {
+            // Check for error-like properties if instanceof failed
+            if (arg.message && (arg.name || arg.stack)) {
                  return `${arg.name || 'Error'}: ${arg.message}\n${arg.stack || ''}`;
             }
-            return str.length > 300 ? str.substring(0, 300) + '...' : str;
+
+            const str = JSON.stringify(arg);
+            
+            // If JSON.stringify returns empty object, it might be an Error or have non-enumerable props
+            if (str === '{}') {
+                 // Try to extract own property names manually
+                 const props = Object.getOwnPropertyNames(arg);
+                 if (props.length > 0) {
+                     const obj: any = {};
+                     props.forEach(key => obj[key] = (arg as any)[key]);
+                     const str2 = JSON.stringify(obj);
+                     if (str2 !== '{}') return str2;
+                 }
+                 
+                 // Fallback to toString if it's meaningful
+                 if (arg.toString && arg.toString() !== '[object Object]') {
+                    return arg.toString();
+                 }
+                 
+                 // Last resort
+                 if (arg.message) return arg.message;
+            }
+            
+            return str.length > 500 ? str.substring(0, 500) + '...' : str;
         } catch (e) {
-          return '[Object]';
+          return '[Circular or Non-Serializable Object]';
         }
       }
       return String(arg);

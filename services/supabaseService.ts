@@ -3,6 +3,7 @@
 
 
 
+
 import { createClient } from '@supabase/supabase-js';
 import { BackupData, SyncConfig, Transaction, RecurringPlan, CategoryDef } from '../types';
 
@@ -126,8 +127,14 @@ export const pullChanges = async (config: SyncConfig, lastSyncedAt: number) => {
     } catch (e: any) {
         // Handle Network Errors gracefully
         const msg = e.message || String(e);
-        // Broaden check for various network error formats (TypeError often means network failure in fetch)
-        if (msg.match(/NetworkError|Failed to fetch|connection|Internet/i) || (e.name === 'TypeError' && !msg.includes('relation'))) {
+        const isNetworkError = 
+            msg.toLowerCase().includes('network') || 
+            msg.toLowerCase().includes('fetch') || 
+            msg.toLowerCase().includes('connection') ||
+            msg.toLowerCase().includes('offline') ||
+            (e.name === 'TypeError' && !msg.includes('relation'));
+
+        if (isNetworkError) {
             console.warn("Sync paused: Network unavailable.");
         } else {
             console.error("Sync Pull Error:", msg);
@@ -248,7 +255,14 @@ export const pushChanges = async (
         return { success: true, uploadSizeBytes };
     } catch (e: any) {
         const msg = e.message || String(e);
-        if (msg.match(/NetworkError|Failed to fetch|connection|Internet/i) || (e.name === 'TypeError' && !msg.includes('relation'))) {
+        const isNetworkError = 
+            msg.toLowerCase().includes('network') || 
+            msg.toLowerCase().includes('fetch') || 
+            msg.toLowerCase().includes('connection') ||
+            msg.toLowerCase().includes('offline') ||
+            (e.name === 'TypeError' && !msg.includes('relation'));
+
+        if (isNetworkError) {
             console.warn("Sync paused: Network unavailable during push.");
         } else {
             console.error("Sync Push Error:", msg);
