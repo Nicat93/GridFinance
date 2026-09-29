@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { evaluateArithmetic } from '../services/safeArithmetic';
 
 interface Props {
   isOpen: boolean;
@@ -87,12 +88,10 @@ const CalculatorSheet: React.FC<Props> = ({ isOpen, initialValue, onClose, onApp
   const calculate = (): string => {
     try {
       const fullExpr = equation + display;
-      // Safe evaluation of basic math
-      // eslint-disable-next-line
-      const result = Function('"use strict";return (' + fullExpr + ')')();
+      const result = evaluateArithmetic(fullExpr);
       const resultStr = String(Math.round(result * 100) / 100); // Round to 2 decimals
       return resultStr;
-    } catch (e) {
+    } catch {
       return display;
     }
   };

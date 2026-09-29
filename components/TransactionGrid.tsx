@@ -56,9 +56,9 @@ const TransactionGrid: React.FC<Props> = ({
         switch (sortOption) {
             case 'date_asc':
                 // For "Next Due" option, History should be Newest first (Descending)
-                const dAscA = new Date(a.date).getTime();
-                const dAscB = new Date(b.date).getTime();
-                if (dAscA !== dAscB) return dAscB - dAscA;
+                const dAscA = a.date;
+                const dAscB = b.date;
+                if (dAscA !== dAscB) return dAscB.localeCompare(dAscA);
                 // Stable sort by creation time (Newer first)
                 return (b.createdAt || 0) - (a.createdAt || 0);
             case 'description_asc':
@@ -73,9 +73,9 @@ const TransactionGrid: React.FC<Props> = ({
             case 'date_desc':
             default:
                 // Date Desc + Stability
-                const timeA = new Date(a.date).getTime();
-                const timeB = new Date(b.date).getTime();
-                if (timeA !== timeB) return timeB - timeA;
+                const timeA = a.date;
+                const timeB = b.date;
+                if (timeA !== timeB) return timeB.localeCompare(timeA);
                 // Stable sort by creation time (Newer first)
                 return (b.createdAt || 0) - (a.createdAt || 0);
         }
