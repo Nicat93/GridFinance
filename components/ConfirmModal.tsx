@@ -11,7 +11,6 @@ interface Props {
   confirmText?: string;
   cancelText?: string;
   alternativeText?: string;
-  confirmDisabled?: boolean;
 }
 
 const ConfirmModal: React.FC<Props> = ({ 
@@ -23,8 +22,7 @@ const ConfirmModal: React.FC<Props> = ({
     onAlternative,
     confirmText = "Confirm",
     cancelText = "Cancel",
-    alternativeText,
-    confirmDisabled = false
+    alternativeText
 }) => {
   useEffect(() => {
     if (isOpen) {
@@ -49,8 +47,7 @@ const ConfirmModal: React.FC<Props> = ({
         <div className="flex flex-col gap-3">
             <button 
                 onClick={onConfirm}
-                disabled={confirmDisabled}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-wait text-white py-2.5 rounded text-sm font-medium transition-colors"
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded text-sm font-medium transition-colors"
             >
                 {confirmText}
             </button>

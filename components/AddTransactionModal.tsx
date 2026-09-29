@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Frequency, TransactionType, Transaction, RecurringPlan, CategoryDef, LanguageCode } from '../types';
 import CalculatorSheet from './CalculatorSheet';
 import { translations } from '../translations';
-import { todayDateOnly } from '../services/dateOnly';
 
 interface Props {
   isOpen: boolean;
@@ -34,7 +33,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   
-  const [date, setDate] = useState(todayDateOnly());
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   
   const [isRecurring, setIsRecurring] = useState(false);
   const [frequency, setFrequency] = useState<Frequency>(Frequency.MONTHLY);
@@ -107,7 +106,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
         setAmount('');
         setDescription('');
         setSelectedTags([]);
-        const today = todayDateOnly();
+        const today = new Date().toISOString().split('T')[0];
         setDate(today);
         setPlanStartDate(today);
         setIsRecurring(false);

@@ -95,11 +95,6 @@ export interface BackupData {
   /** Tombstones for sync: { id: timestampOfDeletion } */
   deletedIds?: { [id: string]: number };
   categoryDefs?: CategoryDef[];
-  transactionDeletedIds?: Record<string, number>;
-  planDeletedIds?: Record<string, number>;
-  deletedCategoryIds?: Record<string, number>;
-  deletedCategoryNames?: Record<string, string>;
-  cycleStartDayLastModified?: number;
 }
 
 /**

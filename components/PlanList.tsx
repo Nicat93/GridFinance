@@ -4,7 +4,6 @@ import React, { useState, useMemo } from 'react';
 import { RecurringPlan, Frequency, SortOption, CategoryDef, LanguageCode } from '../types';
 import { DesignConfig } from './DesignDebugger';
 import { translations } from '../translations';
-import { addDateOnly, dateOnlyToLocalDate, formatDateOnly } from '../services/dateOnly';
 
 interface Props {
   plans: RecurringPlan[];
@@ -26,8 +25,20 @@ const KNOWN_COLORS = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime
 
 
 // --- Date Helpers ---
+const parseLocalDate = (dateStr: string): Date => {
+    const parts = dateStr.split('-');
+    return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+};
+
 const addTimeLocal = (date: string | Date, freq: Frequency, count: number): Date => {
-    return dateOnlyToLocalDate(addDateOnly(typeof date === 'string' ? date : formatDateOnly(date), freq, count));
+    let d = typeof date === 'string' ? parseLocalDate(date) : new Date(date);
+    if (isNaN(d.getTime())) d = new Date();
+    const startDay = d.getDate();
+    if (freq === Frequency.ONE_TIME) return d;
+    if (freq === Frequency.WEEKLY) d.setDate(d.getDate() + (7 * count));
+    if (freq === Frequency.MONTHLY) { d.setMonth(d.getMonth() + count); if (d.getDate() !== startDay) d.setDate(0); }
+    if (freq === Frequency.YEARLY) { d.setFullYear(d.getFullYear() + count); if (d.getDate() !== startDay) d.setDate(0); }
+    return d;
 };
 
 // --- Component ---
@@ -57,7 +68,7 @@ const PlanList: React.FC<Props> = ({
     if (startDate || endDate) {
         result = result.filter(p => {
              const nextDate = addTimeLocal(p.startDate, p.frequency, p.occurrencesGenerated);
-             const nextDateStr = formatDateOnly(nextDate);
+             const nextDateStr = nextDate.toISOString().split('T')[0];
              
              if (startDate && nextDateStr < startDate) return false;
              if (endDate && nextDateStr > endDate) return false;
