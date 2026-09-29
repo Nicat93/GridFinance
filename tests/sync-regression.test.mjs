@@ -337,3 +337,167 @@ test('clearSyncData reports partial cloud failures', async () => {
     service.initSupabase('', '');
   }
 });
+
+test('a rollback-stamped local edit still beats an older remote tombstone after logical-clock stamping', () => {
+  const local = { id: 'rollback-edit', lastModified: 501 };
+  const merged = service.mergeDeltas(currentState([local]), {
+    transactions: [{ id: local.id, updated_at: 500, deleted: true }], plans: [], categories: [], metadata: null,
+  });
+  assert.deepEqual(merged.transactions, [local]);
+  assert.equal(merged.transactionDeletedIds[local.id], undefined);
+});
+
+test('a local tombstone remains authoritative against an older remote row after clock rollback', () => {
+  const local = currentState();
+  local.transactionDeletedIds = { 'rollback-delete': 501 };
+  const merged = service.mergeDeltas(local, {
+    transactions: [{ id: 'rollback-delete', updated_at: 500, deleted: false, data: { id: 'rollback-delete', lastModified: 500 } }],
+    plans: [], categories: [], metadata: null,
+  });
+  assert.deepEqual(merged.transactions, []);
+  assert.equal(merged.transactionDeletedIds['rollback-delete'], 501);
+});
+
+test('timestamped local operations below the watermark are safely rebased when the cloud has no newer ID', async () => {
+  const originalFetch = globalThis.fetch;
+  const writes = [];
+  try {
+    globalThis.fetch = async (input, init) => {
+      const auth = authenticatedResponse(input);
+      if (auth) return auth;
+      const request = input instanceof Request ? input : new Request(input, init);
+      if (request.method === 'GET') return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
+      writes.push(JSON.parse(await request.clone().text()));
+      return new Response('[]', { status: 201, headers: { 'content-type': 'application/json' } });
+    };
+    service.initSupabase(config.supabaseUrl, config.supabaseKey, config.syncId);
+    const result = await service.pushChanges(config,
+      [{ id: 'offline-old-edit', lastModified: 50 }], [],
+      [{ id: 'old-category', name: 'Food', lastModified: 60 }], {}, 15, 100,
+      {}, { 'old-delete': 70 }, {}, {}, 80);
+    assert.equal(result.success, true);
+    const rows = writes.flat();
+    assert.ok(rows.some(row => row.id === 'offline-old-edit' && row.updated_at > 100 && row.data.lastModified === row.updated_at));
+    assert.ok(rows.some(row => row.id === 'old-delete' && row.deleted && row.updated_at > 100));
+    assert.ok(rows.some(row => row.id === 'old-category' && row.updated_at > 100 && row.data.lastModified === row.updated_at));
+    assert.ok(rows.some(row => row.cycle_start_day === 15 && row.updated_at > 100));
+  } finally {
+    globalThis.fetch = originalFetch;
+    service.initSupabase('', '');
+  }
+});
+
+test('complete backup reconciliation tombstones omitted IDs and installs imported records and billing metadata', async () => {
+  const originalFetch = globalThis.fetch;
+  const writes = [];
+  let cloudCycleStartDay = 1;
+  let cloudCycleUpdatedAt = 900;
+  const cloud = {
+    grid_transactions: [
+      { sync_id: config.syncId, id: 'A', data: { id: 'A' }, updated_at: 800, deleted: false },
+      { sync_id: config.syncId, id: 'B', data: { id: 'B' }, updated_at: 801, deleted: false },
+      { sync_id: 'another-sync', id: 'untouched', data: {}, updated_at: 950, deleted: false },
+    ],
+    grid_plans: [{ sync_id: config.syncId, id: 'old-plan', data: {}, updated_at: 802, deleted: false }],
+    grid_categories: [{ sync_id: config.syncId, id: 'old-category', data: { name: 'Old' }, updated_at: 803, deleted: false }],
+  };
+  try {
+    globalThis.fetch = async (input, init) => {
+      const auth = authenticatedResponse(input);
+      if (auth) return auth;
+      const request = input instanceof Request ? input : new Request(input, init);
+      const url = new URL(request.url);
+      const table = url.pathname.split('/').at(-1);
+      assert.equal(request.headers.get('x-gridfinance-sync-id'), config.syncId);
+      if (request.method === 'GET') {
+        assert.equal(url.searchParams.get('sync_id'), `eq.${config.syncId}`);
+        return new Response(JSON.stringify(table === 'grid_metadata' ? [{ cycle_start_day: cloudCycleStartDay, updated_at: cloudCycleUpdatedAt }] : (cloud[table] || []).filter(row => row.sync_id === config.syncId)), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      const rows = JSON.parse(await request.clone().text());
+      writes.push({ table, rows });
+      if (Array.isArray(rows) && cloud[table]) {
+        rows.forEach(row => {
+          const index = cloud[table].findIndex(existing => existing.sync_id === row.sync_id && existing.id === row.id);
+          if (index < 0) cloud[table].push(row); else cloud[table][index] = row;
+        });
+      }
+      if (table === 'grid_metadata') { cloudCycleStartDay = rows.cycle_start_day; cloudCycleUpdatedAt = rows.updated_at; }
+      return new Response('[]', { status: 201, headers: { 'content-type': 'application/json' } });
+    };
+    service.initSupabase(config.supabaseUrl, config.supabaseKey, config.syncId);
+    const imported = {
+      transactions: [{ id: 'A', date: '2026-09-29', description: 'A', amount: 2, type: 'expense', tags: [], isPaid: true, createdAt: 1 }, { id: 'backup-only', date: '2026-09-29', description: 'New', amount: 3, type: 'income', tags: [], isPaid: true, createdAt: 2 }],
+      plans: [{ id: 'new-plan', description: 'Plan', amount: 4, type: 'expense', frequency: 'Monthly', startDate: '2026-09-01', occurrencesGenerated: 0, tags: [], createdAt: 3 }],
+      categoryDefs: [{ id: 'new-category', name: 'New', color: 'blue' }],
+      cycleStartDay: 7,
+      deletedIds: {}, transactionDeletedIds: {}, planDeletedIds: {}, deletedCategoryIds: {}, deletedCategoryNames: {},
+    };
+    const result = await service.reconcileImportedBackup(config, imported);
+    assert.equal(result.success, true, JSON.stringify(result.error));
+    assert.deepEqual(result.backup.transactions.map(row => row.id), ['A', 'backup-only']);
+    assert.equal(result.backup.transactions.find(row => row.id === 'A').isPaid, true);
+    assert.ok(result.backup.transactions[0].lastModified > 900);
+    assert.ok(result.backup.transactionDeletedIds.B > 900);
+    assert.ok(result.backup.planDeletedIds['old-plan'] > 900);
+    assert.ok(result.backup.deletedCategoryIds['old-category'] > 900);
+    assert.equal(result.backup.cycleStartDayLastModified > 900, true);
+    const allWrites = writes.flatMap(write => write.rows);
+    assert.ok(allWrites.some(row => row.id === 'B' && row.deleted));
+    assert.ok(allWrites.some(row => row.id === 'backup-only' && !row.deleted));
+    assert.ok(allWrites.some(row => row.id === 'old-plan' && row.deleted));
+    assert.ok(allWrites.some(row => row.id === 'old-category' && row.deleted));
+    assert.ok(writes.some(write => write.table === 'grid_metadata' && write.rows.cycle_start_day === 7));
+    assert.ok(!allWrites.some(row => row.id === 'untouched'));
+
+    const nextPull = await service.pullChanges(config, 0);
+    assert.equal(nextPull.success, true);
+    const afterNextSync = service.mergeDeltas({
+      ...currentState(result.backup.transactions, result.backup.plans),
+      categoryDefs: result.backup.categoryDefs,
+      transactionDeletedIds: result.backup.transactionDeletedIds,
+      planDeletedIds: result.backup.planDeletedIds,
+      deletedCategoryIds: result.backup.deletedCategoryIds,
+      deletedCategoryNames: result.backup.deletedCategoryNames,
+    }, nextPull.changes);
+    assert.deepEqual(afterNextSync.transactions.map(row => row.id).sort(), ['A', 'backup-only']);
+    assert.equal(afterNextSync.transactions.find(row => row.id === 'A').isPaid, true);
+    assert.equal(afterNextSync.plans.some(row => row.id === 'new-plan'), true);
+    assert.deepEqual(afterNextSync.categoryDefs.map(row => row.id), ['new-category']);
+    assert.equal(afterNextSync.cycleStartDay, 7);
+  } finally {
+    globalThis.fetch = originalFetch;
+    service.initSupabase('', '');
+  }
+});
+
+test('failed backup cloud reconciliation is reported as unsuccessful', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async (input, init) => {
+      const auth = authenticatedResponse(input);
+      if (auth) return auth;
+      const request = input instanceof Request ? input : new Request(input, init);
+      const table = new URL(request.url).pathname.split('/').at(-1);
+      if (request.method === 'GET') return new Response(table === 'grid_metadata' ? '[]' : '[]', { status: 200, headers: { 'content-type': 'application/json' } });
+      if (table === 'grid_plans') return new Response('{"message":"write failed"}', { status: 500, headers: { 'content-type': 'application/json' } });
+      return new Response('[]', { status: 201, headers: { 'content-type': 'application/json' } });
+    };
+    service.initSupabase(config.supabaseUrl, config.supabaseKey, config.syncId);
+    const result = await service.reconcileImportedBackup(config, {
+      transactions: [], plans: [{ id: 'plan', description: 'Plan', amount: 1, type: 'expense', frequency: 'Monthly', startDate: '2026-09-01', occurrencesGenerated: 0, tags: [], createdAt: 1 }], categoryDefs: [], cycleStartDay: 1,
+    });
+    assert.equal(result.success, false);
+    assert.equal(result.backup, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+    service.initSupabase('', '');
+  }
+});
+
+test('backup import reconciliation stays local when sync is disabled', async () => {
+  service.initSupabase('', '');
+  const backup = { transactions: [], plans: [], categoryDefs: [], cycleStartDay: 1 };
+  const result = await service.reconcileImportedBackup({ ...config, enabled: false, syncId: '' }, backup);
+  assert.equal(result.success, true);
+  assert.equal(result.backup, backup);
+});

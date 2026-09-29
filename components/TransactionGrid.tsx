@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { Transaction, SortOption, CategoryDef, LanguageCode } from '../types';
 import { DesignConfig } from './DesignDebugger';
 import { translations } from '../translations';
+import { getPaidVisualState } from '../services/financialState';
 
 interface Props {
   transactions: Transaction[];
@@ -16,6 +17,7 @@ interface Props {
   startDate?: string;
   endDate?: string;
   language: LanguageCode;
+  today?: string;
 }
 
 const PAGE_SIZE = 50;
@@ -24,7 +26,7 @@ const KNOWN_COLORS = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime
 const TransactionGrid: React.FC<Props> = ({ 
     transactions, onDelete, onEdit, 
     filterText, sortOption, designConfig, categories,
-    startDate, endDate, language
+    startDate, endDate, language, today
 }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -228,7 +230,7 @@ const TransactionGrid: React.FC<Props> = ({
                                     
                                     {/* Date Pill */}
                                     <span 
-                                        className="px-1.5 py-0 bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 whitespace-nowrap h-4 flex items-center"
+                                        className={`px-1.5 py-0 border whitespace-nowrap h-4 flex items-center ${getPaidVisualState(tx, today) === 'paid-early' ? 'bg-violet-100 dark:bg-violet-900/50 border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300' : getPaidVisualState(tx, today) === 'paid' ? 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300' : 'bg-gray-100 dark:bg-gray-800/60 border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400'}`}
                                         style={pillStyle}
                                     >
                                         {formatShortDate(tx.date)}

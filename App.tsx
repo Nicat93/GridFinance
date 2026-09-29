@@ -16,11 +16,13 @@ import DesignDebugger, { DesignConfig } from './components/DesignDebugger';
 import CategoryManager from './components/CategoryManager';
 import DateRangeModal from './components/DateRangeModal';
 import * as SupabaseService from './services/supabaseService';
-import { getRecurringOccurrenceId } from './services/recurrence';
+import { getPlanOccurrencesInRange, getRecurringOccurrenceId } from './services/recurrence';
 import { APP_VERSION } from './version';
 import { translations } from './translations';
 import { validateBackup } from './services/backupValidation';
-import { addDateOnly, calculateBillingPeriod, dateOnlyToLocalDate, formatDateOnly, isDateOnlyAfter } from './services/dateOnly';
+import { addDateOnly, calculateBillingPeriod, dateOnlyToLocalDate, formatDateOnly, isDateOnlyAfter, todayDateOnly } from './services/dateOnly';
+import { affectsCurrentBalance } from './services/financialState';
+import { LogicalClock, mergeLocalSnapshots, persistMergedSnapshot, readLocalSnapshot } from './services/localState';
 
 // --- Utility Functions ---
 
@@ -67,6 +69,15 @@ export default function App() {
       return saved ? parseInt(saved, 10) : 1;
   });
   const [cycleStartDayLastModified, setCycleStartDayLastModified] = useState<number>(() => Number(localStorage.getItem('cycleStartDayLastModified') || 0));
+  const [localResetAt, setLocalResetAt] = useState<number>(() => Number(localStorage.getItem('localResetAt') || 0));
+  const logicalClock = useRef(new LogicalClock(Math.max(Number(localStorage.getItem('cycleStartDayLastModified') || 0), Number(localStorage.getItem('syncConfig') ? JSON.parse(localStorage.getItem('syncConfig')!).lastSyncedAt || 0 : 0))));
+  const nextLogicalTime = () => logicalClock.current.next(
+      stateRef.current?.syncConfig?.lastSyncedAt || 0,
+      stateRef.current?.cycleStartDayLastModified || 0,
+      ...[...(stateRef.current?.transactions || []), ...(stateRef.current?.plans || []), ...(stateRef.current?.categoryDefs || [])].map(item => item.lastModified || 0),
+      ...Object.values(stateRef.current?.transactionDeletedIds || {}), ...Object.values(stateRef.current?.planDeletedIds || {}),
+      ...Object.values(stateRef.current?.deletedCategoryIds || {})
+  );
 
   const [deletedIds, setDeletedIds] = useState<{ [id: string]: number }>(() => {
       const saved = localStorage.getItem('deletedIds');
@@ -78,7 +89,7 @@ export default function App() {
   const [deletedCategoryNames, setDeletedCategoryNames] = useState<Record<string, string>>(() => JSON.parse(localStorage.getItem('deletedCategoryNames') || '{}'));
   const setLocalCycleStartDay = (day: number) => {
       setCycleStartDay(day);
-      setCycleStartDayLastModified(Date.now());
+      setCycleStartDayLastModified(nextLogicalTime());
   };
 
   // Persistent Category/Tag Definitions
@@ -129,6 +140,13 @@ export default function App() {
   });
 
   const [viewDate, setViewDate] = useState<Date>(() => new Date());
+  const [today, setToday] = useState(() => todayDateOnly());
+  useEffect(() => {
+      const now = new Date();
+      const untilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime();
+      const timeout = window.setTimeout(() => setToday(todayDateOnly()), untilMidnight);
+      return () => window.clearTimeout(timeout);
+  }, [today]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
@@ -170,17 +188,22 @@ export default function App() {
   const isFirstMount = useRef(true);
 
   // --- Effects: Persistence ---
-  useEffect(() => { localStorage.setItem('transactions', JSON.stringify(transactions)); }, [transactions]);
-  useEffect(() => { localStorage.setItem('plans', JSON.stringify(plans)); }, [plans]);
-  useEffect(() => { localStorage.setItem('cycleStartDay', cycleStartDay.toString()); }, [cycleStartDay]);
-  useEffect(() => { localStorage.setItem('cycleStartDayLastModified', String(cycleStartDayLastModified)); }, [cycleStartDayLastModified]);
-  useEffect(() => { localStorage.setItem('deletedIds', JSON.stringify(deletedIds)); }, [deletedIds]);
-  useEffect(() => { localStorage.setItem('transactionDeletedIds', JSON.stringify(transactionDeletedIds)); }, [transactionDeletedIds]);
-  useEffect(() => { localStorage.setItem('planDeletedIds', JSON.stringify(planDeletedIds)); }, [planDeletedIds]);
-  useEffect(() => { localStorage.setItem('deletedCategoryIds', JSON.stringify(deletedCategoryIds)); }, [deletedCategoryIds]);
-  useEffect(() => { localStorage.setItem('deletedCategoryNames', JSON.stringify(deletedCategoryNames)); }, [deletedCategoryNames]);
-  useEffect(() => { localStorage.setItem('categoryDefs', JSON.stringify(categoryDefs)); }, [categoryDefs]);
-  useEffect(() => { localStorage.setItem('syncConfig', JSON.stringify(syncConfig)); }, [syncConfig]);
+  useEffect(() => {
+      void persistMergedSnapshot(localStorage, { transactions, plans, cycleStartDay, cycleStartDayLastModified, deletedIds, transactionDeletedIds, planDeletedIds, deletedCategoryIds, deletedCategoryNames, categoryDefs, syncConfig, localResetAt }).then(merged => {
+          if (JSON.stringify(merged.transactions) !== JSON.stringify(transactions)) setTransactions(merged.transactions as Transaction[]);
+          if (JSON.stringify(merged.plans) !== JSON.stringify(plans)) setPlans(merged.plans as RecurringPlan[]);
+          if (JSON.stringify(merged.categoryDefs) !== JSON.stringify(categoryDefs)) setCategoryDefs(merged.categoryDefs as CategoryDef[]);
+          if (JSON.stringify(merged.transactionDeletedIds) !== JSON.stringify(transactionDeletedIds)) setTransactionDeletedIds(merged.transactionDeletedIds || {});
+          if (JSON.stringify(merged.planDeletedIds) !== JSON.stringify(planDeletedIds)) setPlanDeletedIds(merged.planDeletedIds || {});
+          if (JSON.stringify(merged.deletedCategoryIds) !== JSON.stringify(deletedCategoryIds)) setDeletedCategoryIds(merged.deletedCategoryIds || {});
+          if (JSON.stringify(merged.deletedCategoryNames) !== JSON.stringify(deletedCategoryNames)) setDeletedCategoryNames(merged.deletedCategoryNames || {});
+          if (JSON.stringify(merged.deletedIds) !== JSON.stringify(deletedIds)) setDeletedIds(merged.deletedIds || {});
+          if (merged.cycleStartDay !== cycleStartDay) setCycleStartDay(merged.cycleStartDay);
+          if (merged.cycleStartDayLastModified !== cycleStartDayLastModified) setCycleStartDayLastModified(merged.cycleStartDayLastModified || 0);
+          if (JSON.stringify(merged.syncConfig) !== JSON.stringify(syncConfig)) setSyncConfig(merged.syncConfig as SyncConfig);
+          if (merged.localResetAt !== localResetAt) setLocalResetAt(merged.localResetAt || 0);
+      });
+  }, [transactions, plans, cycleStartDay, cycleStartDayLastModified, deletedIds, transactionDeletedIds, planDeletedIds, deletedCategoryIds, deletedCategoryNames, categoryDefs, syncConfig, localResetAt]);
   useEffect(() => { localStorage.setItem('theme', isDarkMode ? 'dark' : 'light'); }, [isDarkMode]);
   useEffect(() => { localStorage.setItem('language', language); }, [language]);
 
@@ -201,7 +224,7 @@ export default function App() {
         const newDefs = [...prev];
         let changed = false;
         const colors = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
-        const now = Date.now();
+        const now = nextLogicalTime();
 
         usedTags.forEach(tagName => {
             const normalized = tagName.trim();
@@ -225,10 +248,30 @@ export default function App() {
   }, [transactions, plans]);
 
   // --- Sync Logic ---
-  const stateRef = useRef({ transactions, plans, cycleStartDay, cycleStartDayLastModified, deletedIds, transactionDeletedIds, planDeletedIds, deletedCategoryIds, deletedCategoryNames, categoryDefs, syncConfig });
+  const stateRef = useRef({ transactions, plans, cycleStartDay, cycleStartDayLastModified, deletedIds, transactionDeletedIds, planDeletedIds, deletedCategoryIds, deletedCategoryNames, categoryDefs, syncConfig, localResetAt });
   // Keep the ref current during render so async sync continuations see the
   // latest committed state, rather than a snapshot from before a network wait.
-  stateRef.current = { transactions, plans, cycleStartDay, cycleStartDayLastModified, deletedIds, transactionDeletedIds, planDeletedIds, deletedCategoryIds, deletedCategoryNames, categoryDefs, syncConfig };
+  stateRef.current = { transactions, plans, cycleStartDay, cycleStartDayLastModified, deletedIds, transactionDeletedIds, planDeletedIds, deletedCategoryIds, deletedCategoryNames, categoryDefs, syncConfig, localResetAt };
+
+  useEffect(() => {
+      const onStorage = (event: StorageEvent) => {
+          if (event.storageArea !== localStorage || !event.key || !(event.key in {
+              transactions: 1, plans: 1, cycleStartDay: 1, cycleStartDayLastModified: 1, deletedIds: 1,
+              transactionDeletedIds: 1, planDeletedIds: 1, deletedCategoryIds: 1, deletedCategoryNames: 1, categoryDefs: 1, syncConfig: 1, localResetAt: 1
+          })) return;
+          const current = stateRef.current;
+          const merged = mergeLocalSnapshots(current, readLocalSnapshot(localStorage));
+          setTransactions(merged.transactions as Transaction[]); setPlans(merged.plans as RecurringPlan[]);
+          setCategoryDefs(merged.categoryDefs as CategoryDef[]); setCycleStartDay(merged.cycleStartDay);
+          setCycleStartDayLastModified(merged.cycleStartDayLastModified || 0); setDeletedIds(merged.deletedIds || {});
+          setTransactionDeletedIds(merged.transactionDeletedIds || {}); setPlanDeletedIds(merged.planDeletedIds || {});
+          setDeletedCategoryIds(merged.deletedCategoryIds || {}); setDeletedCategoryNames(merged.deletedCategoryNames || {});
+          if (merged.syncConfig) setSyncConfig(merged.syncConfig as SyncConfig);
+          setLocalResetAt(merged.localResetAt || 0);
+      };
+      window.addEventListener('storage', onStorage);
+      return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   const triggerSync = useCallback(async () => {
       const currentConfig = stateRef.current.syncConfig;
@@ -458,7 +501,7 @@ export default function App() {
   }, [syncConfig.enabled, triggerSync]);
 
   const snapshot: FinancialSnapshot = useMemo(() => {
-    const currentBalance = transactions.reduce((acc, t) => t.type === 'income' ? acc + t.amount : acc - t.amount, 0);
+    const currentBalance = transactions.reduce((acc, t) => !affectsCurrentBalance(t) ? acc : t.type === 'income' ? acc + t.amount : acc - t.amount, 0);
     const { start: periodStart, end: periodEnd } = calculateBillingPeriod(viewDate, cycleStartDay);
     const periodStartDate = formatDateOnly(periodStart);
     const periodEndDate = formatDateOnly(periodEnd);
@@ -467,31 +510,13 @@ export default function App() {
     let upcomingIncome = 0;
     let upcomingExpenses = 0;
 
-    plans.forEach(plan => {
-        let simDate = addTime(plan.startDate, plan.frequency, plan.occurrencesGenerated);
-        let simCount = plan.occurrencesGenerated;
-        let safety = 0;
-
-        while (safety < 100) {
-            safety++;
-            const currentDate = formatDateOnly(simDate);
-
-            if (currentDate > periodEndDate) break;
-            if (plan.maxOccurrences && simCount >= plan.maxOccurrences) break;
-            if (plan.endDate && isDateOnlyAfter(currentDate, plan.endDate)) break;
-
-            if (currentDate >= periodStartDate) {
-                if (plan.type === 'income') { upcomingIncome += plan.amount; projectedBalance += plan.amount; }
-                else { upcomingExpenses += plan.amount; projectedBalance -= plan.amount; }
-            }
-            simCount++;
-            simDate = addTime(plan.startDate, plan.frequency, simCount);
-            if (plan.frequency === Frequency.ONE_TIME) break;
-        }
-    });
+    plans.forEach(plan => getPlanOccurrencesInRange(plan, periodStartDate, periodEndDate).forEach(() => {
+        if (plan.type === 'income') { upcomingIncome += plan.amount; projectedBalance += plan.amount; }
+        else { upcomingExpenses += plan.amount; projectedBalance -= plan.amount; }
+    }));
 
     return { currentBalance, projectedBalance, upcomingIncome, upcomingExpenses, periodStart, periodEnd };
-  }, [transactions, plans, cycleStartDay, viewDate]);
+  }, [transactions, plans, cycleStartDay, viewDate, today]);
 
   const handleClearDataRequest = () => {
       setIsClearDataConfirmOpen(true);
@@ -541,6 +566,7 @@ export default function App() {
       setDeletedCategoryIds({});
       setDeletedCategoryNames({});
       setCategoryDefs([]); // Reset Categories too
+      setLocalResetAt(nextLogicalTime());
       setLocalCycleStartDay(1);
       setSyncConfig(prev => ({ ...prev, lastSyncedAt: 0 }));
       setIsClearDataConfirmOpen(false);
@@ -550,7 +576,7 @@ export default function App() {
   const handleAddMockData = () => {
       const newTxs: Transaction[] = [];
       const newPlans: RecurringPlan[] = [];
-      const now = Date.now();
+      const now = nextLogicalTime();
       const mockCats = ['Food', 'Transport', 'Housing', 'Utilities'];
 
       // Add Mock categories if they don't exist
@@ -624,10 +650,51 @@ export default function App() {
   };
 
   const handleImportData = async (file: File) => {
+    let cloudImportLocked = false;
+    let importApplied = false;
     try {
         const text = await file.text();
-        const imported = validateBackup(JSON.parse(text));
+        let imported = validateBackup(JSON.parse(text));
         if (window.confirm(`Found ${imported.transactions.length} transactions and ${imported.plans.length} plans. This will OVERWRITE your current local data. Continue?`)) {
+            if (imported.categoryDefs !== undefined) {
+                const definedNames = new Set(imported.categoryDefs.map(category => category.name.trim().toLowerCase()));
+                const suppressedNames = new Set(Object.values(imported.deletedCategoryNames || {}).map(name => name.toLowerCase()));
+                const omittedTags = new Set([...imported.transactions, ...imported.plans].flatMap(item => item.tags || [])
+                    .map(name => name.trim()).filter(name => name && !definedNames.has(name.toLowerCase()) && !suppressedNames.has(name.toLowerCase())));
+                for (const name of omittedTags) {
+                    const id = `restore-omitted:${generateId()}`;
+                    imported.deletedCategoryIds![id] = nextLogicalTime();
+                    imported.deletedCategoryNames![id] = name;
+                }
+            }
+            const currentConfig = stateRef.current.syncConfig;
+            if (currentConfig.enabled) {
+                if (!currentConfig.syncId || !currentConfig.supabaseUrl || !currentConfig.supabaseKey) {
+                    alert('Import failed: cloud sync is enabled but not fully configured. Your local data was not changed.');
+                    return;
+                }
+                if (isSyncingRef.current) {
+                    alert('Import is waiting for the active sync to finish. Retry the import afterward. Your data was not changed.');
+                    return;
+                }
+                isSyncingRef.current = true;
+                cloudImportLocked = true;
+                const reconciliation = await SupabaseService.reconcileImportedBackup(currentConfig, imported);
+                if (!reconciliation.success || !reconciliation.backup) {
+                    alert('Import failed: cloud reconciliation did not complete. Your local data was not changed; cloud changes may be partial. Retry the import while online.');
+                    return;
+                }
+                imported = reconciliation.backup as typeof imported;
+            } else {
+                const localRestore = await SupabaseService.reconcileImportedBackup(currentConfig, imported);
+                if (!localRestore.success || !localRestore.backup) {
+                    alert('Import failed. Your local data was not changed.');
+                    return;
+                }
+                imported = localRestore.backup as typeof imported;
+            }
+            const importedResetAt = nextLogicalTime();
+            setLocalResetAt(importedResetAt);
             setTransactions(imported.transactions);
             setPlans(imported.plans);
             setCycleStartDay(imported.cycleStartDay);
@@ -637,18 +704,43 @@ export default function App() {
             setDeletedCategoryIds(imported.deletedCategoryIds || {});
             setDeletedCategoryNames(imported.deletedCategoryNames || {});
             setCycleStartDayLastModified(imported.cycleStartDayLastModified || 0);
-            if (imported.categoryDefs !== undefined) setCategoryDefs(imported.categoryDefs);
+            setCategoryDefs(imported.categoryDefs || []);
             setSyncConfig(prev => ({ ...prev, lastSyncedAt: 0 }));
+            stateRef.current = {
+                ...stateRef.current,
+                transactions: imported.transactions,
+                plans: imported.plans,
+                cycleStartDay: imported.cycleStartDay,
+                cycleStartDayLastModified: imported.cycleStartDayLastModified || 0,
+                deletedIds: imported.deletedIds,
+                transactionDeletedIds: imported.transactionDeletedIds || {},
+                planDeletedIds: imported.planDeletedIds || {},
+                deletedCategoryIds: imported.deletedCategoryIds || {},
+                deletedCategoryNames: imported.deletedCategoryNames || {},
+                categoryDefs: imported.categoryDefs || [],
+                syncConfig: { ...currentConfig, lastSyncedAt: 0 },
+                localResetAt: importedResetAt,
+            };
+            importApplied = true;
             setIsSettingsOpen(false);
-            alert("Import successful.");
+            alert(currentConfig.enabled ? 'Import successful and cloud state reconciled.' : 'Import successful.');
         }
     } catch (e) {
         alert("Import failed: the file is not a valid GridFinance backup or contains invalid data. Your data was not changed.");
+    } finally {
+        if (cloudImportLocked) {
+            isSyncingRef.current = false;
+            if (syncPendingRef.current && importApplied) {
+                syncPendingRef.current = false;
+                window.setTimeout(() => triggerSync(), 0);
+            } else syncPendingRef.current = false;
+        }
     }
   };
 
   const handleSaveSyncConfig = (newConfig: SyncConfig) => {
     if (newConfig.syncId !== syncConfig.syncId) {
+        setLocalResetAt(nextLogicalTime());
         setTransactions([]);
         setPlans([]);
         setDeletedIds({});
@@ -658,7 +750,7 @@ export default function App() {
   };
 
   const handleSaveData = (data: any) => {
-    const now = Date.now();
+    const now = nextLogicalTime();
     const finalDescription = data.description?.trim() || 'Unknown';
     // Expecting data.tags as string[]
     const finalTags: string[] = Array.isArray(data.tags) ? data.tags : [];
@@ -755,15 +847,15 @@ export default function App() {
     }
   };
 
-  const executePlanApplication = (planId: string, applyDate: Date) => {
+  const executePlanApplication = (planId: string, applyDate: Date, isPaid = false) => {
     const plan = plans.find(p => p.id === planId);
     if (!plan) return;
-    const now = Date.now();
+    const now = nextLogicalTime();
     const dateStr = applyDate.getFullYear() + '-' + String(applyDate.getMonth() + 1).padStart(2, '0') + '-' + String(applyDate.getDate()).padStart(2, '0');
 
     const newTx: Transaction = {
         id: getRecurringOccurrenceId(plan.id, dateStr), date: dateStr, description: plan.description,
-        amount: plan.amount, type: plan.type, tags: plan.tags, isPaid: false, relatedPlanId: plan.id,
+        amount: plan.amount, type: plan.type, tags: plan.tags, isPaid, relatedPlanId: plan.id,
         createdAt: now,
         lastModified: now
     };
@@ -810,9 +902,9 @@ export default function App() {
       const { targetDate } = transitionState;
       const item = transitionState.pendingItems.find(i => i.plan.id === planId);
       if (!item) return;
-      const now = Date.now();
+      const now = nextLogicalTime();
 
-      if (action === 'paid') { executePlanApplication(planId, item.due); }
+      if (action === 'paid') { executePlanApplication(planId, item.due, true); }
       else if (action === 'cancel') {
           const plan = plans.find(p => p.id === planId);
           if (plan) {
@@ -868,7 +960,7 @@ export default function App() {
   };
 
   const deleteTransaction = (id: string) => {
-    const now = Date.now();
+    const now = nextLogicalTime();
     const txToDelete = transactions.find(t => t.id === id);
     if (txToDelete && txToDelete.relatedPlanId) {
         setPlans(prev => prev.map(p => {
@@ -881,7 +973,7 @@ export default function App() {
   };
 
   const deletePlan = (id: string) => {
-      setTransactionDeletedIds(prev => ({ ...prev, [id]: Date.now() }));
+      setPlanDeletedIds(prev => ({ ...prev, [id]: nextLogicalTime() }));
       setPlans(prev => prev.filter(p => p.id !== id));
   };
 
@@ -943,6 +1035,7 @@ export default function App() {
                 startDate={filterStartDate}
                 endDate={filterEndDate}
                 language={language}
+                today={today}
             />}
         </div>
       </main>
@@ -997,11 +1090,18 @@ export default function App() {
         categories={categoryDefs}
         onSave={(nextCategories) => {
             const previous = stateRef.current.categoryDefs;
+            const previousById = new Map(previous.map(category => [category.id, category]));
+            const timestampedCategories = nextCategories.map(category => {
+                const old = previousById.get(category.id);
+                return !old || old.name !== category.name || old.color !== category.color
+                    ? { ...category, lastModified: nextLogicalTime() }
+                    : { ...category, lastModified: old.lastModified };
+            });
             const nextIds = new Set(nextCategories.map(category => category.id));
             const removed = previous.filter(category => !nextIds.has(category.id));
             const names = { ...stateRef.current.deletedCategoryNames };
             const ids = { ...stateRef.current.deletedCategoryIds };
-            const now = Date.now();
+            const now = nextLogicalTime();
             removed.forEach(category => { names[category.id] = category.name; ids[category.id] = now; });
             nextCategories.forEach(category => {
                 Object.entries(names).forEach(([id, name]) => {
@@ -1010,7 +1110,7 @@ export default function App() {
             });
             setDeletedCategoryNames(names);
             setDeletedCategoryIds(ids);
-            setCategoryDefs(nextCategories);
+            setCategoryDefs(timestampedCategories);
         }}
         language={language}
       />

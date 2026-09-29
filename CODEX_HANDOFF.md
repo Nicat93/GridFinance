@@ -4,7 +4,7 @@ Read this before making changes to synchronization, persistence, importing, recu
 
 ## Current architecture
 
-- `App.tsx` owns transaction, plan, category, billing-cycle, tombstone, sync configuration, and UI state. Most durable state is mirrored to `localStorage` by effects.
+- `App.tsx` owns transaction, plan, category, billing-cycle, tombstone, sync configuration, and UI state. Durable local snapshots are reconciled by existing modification timestamps and tombstones, and serialized across tabs with the Web Locks API before storage writes. `storage` events merge incoming snapshots into active tabs without writing unchanged data back. Explicit clear, sync-target reset, and backup overwrite operations advance a local reset marker so stale tabs cannot refill the cleared/replaced snapshot.
 - Supabase access and merge behavior live in `services/supabaseService.ts`. Transactions, plans, categories, metadata, and tombstones are partitioned by caller-supplied `sync_id`; the client sends it in `x-gridfinance-sync-id`, and RLS filters to that header value. This is intentionally a weak selector, not authentication: anyone who knows or guesses an ID can read and change that partition. The public anon key is not an identity credential.
 - A sync pulls changed rows, merges against the latest local state, then pushes eligible local changes. Pull uses a five-minute buffer before the shared `lastSyncedAt` watermark. Push uses strict `>` timestamp comparisons, with explicit force-upload IDs for local edits that beat remote deletion tombstones.
 - Transaction, plan, and category modifications use `lastModified` instants. Deletes use per-entity timestamp maps: `transactionDeletedIds`, `planDeletedIds`, and `deletedCategoryIds`. Ordinary category tombstones carry the deleted name to prevent category harvesting from recreating it from tags still in history/plans.
@@ -12,6 +12,7 @@ Read this before making changes to synchronization, persistence, importing, recu
 - A single sync runs at a time. A trigger received during it sets a pending flag; completion schedules at most one follow-up. Failed pull/push leaves the watermark unchanged and does not automatically spin in a retry loop.
 - Recurring projections and occurrence dates are calculated from the plan anchor and `occurrencesGenerated`. Materialized occurrences use a deterministic ID derived from plan ID and due date.
 - Backup import parses and validates the complete payload through `services/backupValidation.ts` before application state changes. Known legacy fields migrate there; invalid later records reject the whole backup.
+- A cloud-enabled backup import reconciles the complete backup only inside the selected `sync_id`: imported records receive conflict-winning timestamps, omitted cloud IDs become typed tombstones, categories retain tombstone names, and billing metadata is replaced. Local state changes only after all cloud writes succeed; failed multi-table reconciliation can leave partial remote writes and must be retried.
 - Financial dates are date-only `YYYY-MM-DD` calendar values handled by `services/dateOnly.ts`. Timestamps such as `lastModified` remain epoch instants and are not financial dates.
 
 ## Implemented behavior
@@ -23,9 +24,11 @@ Read this before making changes to synchronization, persistence, importing, recu
 - Calculator input is evaluated by a bounded arithmetic parser in `services/safeArithmetic.ts`; expressions are not passed to dynamic JavaScript execution.
 - Backup data is fully checked before import mutates state, including IDs, date validity, finite numeric amounts/timestamps, tags, plan fields, and deletion maps. Supported older fields migrate description/name, category/tags, missing creation time, paid state, occurrence count, and saved category names. Missing imported `lastModified` stays missing.
 - Financial calendar dates preserve local calendar meaning. Monthly/yearly recurrence clamps short months from the original anchor without cumulative drift. Billing periods start on the configured day, clamp when a month is shorter, and end the day before the next clamped start.
-- A record without `lastModified` is checked against its entity table by ID. It uploads with a fresh sync timestamp only if no cloud row has that ID. On collision, the cloud row wins; the un-timestamped import is not allowed to overwrite it.
+- A record without `lastModified` is checked against its entity table by ID. It uploads with a fresh sync timestamp only if no cloud row has that ID. On collision, the cloud row wins; the un-timestamped import is not allowed to overwrite it. Timestamped local operations at or below the watermark are also checked against cloud timestamps and rebased for upload only when no newer cloud operation exists.
 - Ordinary category deletion writes a category-table tombstone. Pulling it removes that category and records its name so tag harvesting does not recreate it. Explicitly re-adding the name through the category manager clears the matching local suppression/tombstone. Clear Data continues to tombstone the category table too.
 - Cycle-day changes stamp and upload independent metadata. Older cloud metadata cannot replace a newer local cycle-day change.
+- Current balance includes paid transactions only. A paid future-dated transaction retains its scheduled date, affects Current immediately, and displays a paid-early date pill until its scheduled local calendar day.
+- Recurring period projections binary-search the anchor-based occurrence sequence to begin at the selected period, preserving weekly/monthly/yearly clamping and inclusive end dates without scanning old occurrences.
 - Transaction and plan IDs may be equal without their deletion state crossing entity boundaries. Categories have their own tombstone namespace.
 - Repeated sync triggers during a running sync collapse into one follow-up; sync operations do not overlap. A failed run does not itself cause an automatic retry loop.
 - Cloud sync works anonymously and preserves the existing sync-ID workflow across devices. The sync ID is deliberately accepted as the access selector, not proof of identity; there is no account-based isolation guarantee.
@@ -41,6 +44,8 @@ Read this before making changes to synchronization, persistence, importing, recu
 - Billing-cycle metadata synchronizes independently and uses its own modification timestamp.
 - Never run overlapping syncs; coalesce active-run triggers into one follow-up.
 - Validate a complete backup before applying any imported state.
+- Backup import is a full restore for the active sync partition; do not clear or mutate another `sync_id`, and do not apply local imported state after a failed cloud reconciliation.
+- Paid state controls Current balance; transaction dates remain scheduled calendar dates even when paid early.
 - Calculator expressions must never use `eval`, `Function`, or equivalent dynamic execution.
 - Do not assign an invented edit instant to a legacy record in a way that lets stale imported data beat a cloud record.
 - `sync_id` is not authentication. The current compatibility mode intentionally permits anonymous partition access through the client-supplied header; never describe it as secure isolation or ship service-role credentials.
@@ -54,7 +59,8 @@ Read this before making changes to synchronization, persistence, importing, recu
 
 ## Known limitations and risks
 
-- Last-write-wins ordering depends on client clocks; skewed clocks can produce incorrect ordering.
+- New local modifications use a logical clock seeded by the current watermark and known local timestamps, so local clock rollback does not strand new operations. Ordering across independent devices still depends on their client clocks.
+- Cross-tab write serialization uses the browser Web Locks API. Browsers without Web Locks use merge-before-write and storage-event reconciliation without an atomic cross-tab lock.
 - Cloud Clear Data spans multiple requests and is not transactionally atomic. A failed operation may already have tombstoned some tables, and another device can theoretically write during clearing.
 - Historical `deletedIds` values do not identify whether a transaction or plan was deleted. They are not automatically migrated into typed tombstone maps, since guessing could delete a live row. Existing per-table cloud tombstones still merge by entity.
 - An un-timestamped legacy record whose ID already exists remotely is skipped for upload. The cloud wins; local reconciliation depends on a normal pull returning that remote row.

@@ -97,6 +97,17 @@ const fetchPartitionIds = async (table: string, syncId: string): Promise<string[
     }
 };
 
+const fetchPartitionRows = async (table: string, syncId: string): Promise<DBRow[]> => {
+    if (!supabase) throw new Error('Supabase is not initialized');
+    const rows: DBRow[] = [];
+    for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase.from(table).select('*').eq('sync_id', syncId).range(from, from + 999);
+        if (error) throw error;
+        rows.push(...((data || []) as DBRow[]));
+        if (!data || data.length < 1000) return rows;
+    }
+};
+
 /** Tombstone all synchronized records for this syncId and reset shared metadata. */
 export const clearSyncData = async (config: SyncConfig): Promise<{ success: boolean; error?: unknown }> => {
     if (!supabase || !config.syncId) return { success: false, error: new Error('Sync is not configured') };
@@ -129,6 +140,65 @@ export const clearSyncData = async (config: SyncConfig): Promise<{ success: bool
     } catch (error) {
         // Some tables may already have been tombstoned. Keep local data intact
         // and report failure so the user can retry the idempotent operation.
+        return { success: false, error };
+    }
+};
+
+/** Reconcile a complete backup into only the selected cloud partition. */
+export const reconcileImportedBackup = async (config: SyncConfig, backup: BackupData): Promise<{ success: boolean; backup?: BackupData; error?: unknown }> => {
+    if (!config.enabled) return { success: true, backup };
+    if (!supabase || !config.syncId) return { success: false, error: new Error('Sync is not configured') };
+    try {
+        const [cloudTransactions, cloudPlans, cloudCategories, cloudMetadata] = await Promise.all([
+            fetchPartitionRows('grid_transactions', config.syncId),
+            fetchPartitionRows('grid_plans', config.syncId),
+            fetchPartitionRows('grid_categories', config.syncId),
+            supabase.from('grid_metadata').select('updated_at').eq('sync_id', config.syncId).maybeSingle(),
+        ]);
+        if (cloudMetadata.error) throw cloudMetadata.error;
+        const latestCloudTime = [...cloudTransactions, ...cloudPlans, ...cloudCategories].reduce((latest, row) => Math.max(latest, row.updated_at), cloudMetadata.data?.updated_at || 0);
+        let timestamp = Math.max(Date.now(), latestCloudTime) + 1;
+        const imported: BackupData = {
+            ...backup,
+            transactions: backup.transactions.map(item => ({ ...item, lastModified: timestamp++ })),
+            plans: backup.plans.map(item => ({ ...item, lastModified: timestamp++ })),
+            categoryDefs: (backup.categoryDefs || []).map(item => ({ ...item, lastModified: timestamp++ })),
+            transactionDeletedIds: { ...(backup.transactionDeletedIds || {}) },
+            planDeletedIds: { ...(backup.planDeletedIds || {}) },
+            deletedCategoryIds: { ...(backup.deletedCategoryIds || {}) },
+            deletedCategoryNames: { ...(backup.deletedCategoryNames || {}) },
+            cycleStartDayLastModified: timestamp++,
+        };
+        const makeRows = (records: any[], cloudRows: DBRow[], tombstones: Record<string, number>, names?: Record<string, string>) => {
+            const activeIds = new Set(records.map(record => record.id));
+            const remoteIds = new Set(cloudRows.map(row => row.id));
+            for (const id of remoteIds) if (!activeIds.has(id)) {
+                tombstones[id] = timestamp++;
+                const cloudCategory = cloudRows.find(row => row.id === id);
+                if (names && typeof cloudCategory?.data?.name === 'string') names[id] = cloudCategory.data.name;
+            }
+            for (const record of records) delete tombstones[record.id];
+            const rows = records.map(record => ({ sync_id: config.syncId, id: record.id, data: record, updated_at: record.lastModified, deleted: false }));
+            for (const id of Object.keys(tombstones)) {
+                const updatedAt = timestamp++;
+                tombstones[id] = updatedAt;
+                rows.push({ sync_id: config.syncId, id, data: names?.[id] ? { name: names[id] } : {}, updated_at: updatedAt, deleted: true });
+            }
+            return rows;
+        };
+        const transactionRows = makeRows(imported.transactions, cloudTransactions, imported.transactionDeletedIds!);
+        const planRows = makeRows(imported.plans, cloudPlans, imported.planDeletedIds!);
+        const categoryRows = makeRows(imported.categoryDefs!, cloudCategories, imported.deletedCategoryIds!, imported.deletedCategoryNames);
+
+        await batchUpsert('grid_transactions', transactionRows);
+        await batchUpsert('grid_plans', planRows);
+        await batchUpsert('grid_categories', categoryRows);
+        const { error } = await supabase.from('grid_metadata').upsert({
+            sync_id: config.syncId, cycle_start_day: imported.cycleStartDay, updated_at: imported.cycleStartDayLastModified,
+        }, { onConflict: 'sync_id' });
+        if (error) throw error;
+        return { success: true, backup: imported };
+    } catch (error) {
         return { success: false, error };
     }
 };
@@ -246,7 +316,7 @@ export const pushChanges = async (
     
     // 1. Prepare Transactions
     const txUpserts = transactions
-        .filter(t => (t.lastModified || 0) > lastSyncedAt || forceUploadIds.transactions?.includes(t.id))
+        .filter(t => !!t.lastModified || forceUploadIds.transactions?.includes(t.id))
         .map(t => ({
             sync_id: config.syncId,
             id: t.id,
@@ -257,7 +327,7 @@ export const pushChanges = async (
 
     // Add Deletions (Transactions)
     Object.entries(transactionDeletedIds).forEach(([id, ts]) => {
-        if (ts > lastSyncedAt) {
+        if (ts > 0) {
             txUpserts.push({
                 sync_id: config.syncId,
                 id: id,
@@ -270,7 +340,7 @@ export const pushChanges = async (
 
     // 2. Prepare Plans
     const planUpserts = plans
-        .filter(p => (p.lastModified || 0) > lastSyncedAt || forceUploadIds.plans?.includes(p.id))
+        .filter(p => !!p.lastModified || forceUploadIds.plans?.includes(p.id))
         .map(p => ({
             sync_id: config.syncId,
             id: p.id,
@@ -282,7 +352,7 @@ export const pushChanges = async (
     // Add Deletions (Plans)
     const planDeletes: any[] = [];
     Object.entries(planDeletedIds).forEach(([id, ts]) => {
-        if (ts > lastSyncedAt) {
+        if (ts > 0) {
              planDeletes.push({
                 sync_id: config.syncId,
                 id: id,
@@ -295,7 +365,7 @@ export const pushChanges = async (
 
     // 3. Prepare Categories
     const catUpserts = categoryDefs
-        .filter(c => (c.lastModified || 0) > lastSyncedAt)
+        .filter(c => !!c.lastModified)
         .map(c => ({
             sync_id: config.syncId,
             id: c.id,
@@ -304,7 +374,7 @@ export const pushChanges = async (
             deleted: false
         }));
     const catDeletes = Object.entries(deletedCategoryIds)
-        .filter(([, ts]) => ts > lastSyncedAt)
+        .filter(([, ts]) => ts > 0)
         .map(([id, ts]) => ({ sync_id: config.syncId, id, data: deletedCategoryNames[id] ? { name: deletedCategoryNames[id] } : {}, updated_at: ts, deleted: true }));
     
     // Calculate Upload Size
@@ -316,6 +386,45 @@ export const pushChanges = async (
     uploadSizeBytes += getPayloadSize(catDeletes);
 
     try {
+        // Recover timestamped local operations stranded at/below the shared watermark
+        // (for example by an older build running with a rolled-back clock). Only
+        // rebase them when the cloud has no newer version of that ID.
+        let repairTime = Math.max(Date.now(), lastSyncedAt + 1);
+        const repair = async (table: string, operations: any[], forcedIds: string[] = []) => {
+            const pending = operations.filter(row => row.updated_at <= lastSyncedAt && row.updated_at > 0 && !forcedIds.includes(row.id));
+            for (let offset = 0; offset < pending.length; offset += 100) {
+                const chunk = pending.slice(offset, offset + 100);
+                const { data, error } = await supabase.from(table).select('id,updated_at').eq('sync_id', config.syncId).in('id', chunk.map(row => row.id));
+                if (error) throw error;
+                const cloudTimes = new Map((data || []).map((row: any) => [row.id, row.updated_at]));
+                for (const row of chunk) {
+                    const cloudTime = cloudTimes.get(row.id);
+                    if (cloudTime != null && cloudTime > row.updated_at) {
+                        const index = operations.indexOf(row);
+                        if (index >= 0) operations.splice(index, 1);
+                        continue;
+                    }
+                    row.updated_at = repairTime++;
+                    if (!row.deleted && row.data && row.data.lastModified !== undefined) row.data = { ...row.data, lastModified: row.updated_at };
+                    uploadSizeBytes += getPayloadSize(row);
+                }
+            }
+        };
+        await repair('grid_transactions', txUpserts, forceUploadIds.transactions || []);
+        await repair('grid_plans', planUpserts, forceUploadIds.plans || []);
+        await repair('grid_plans', planDeletes);
+        await repair('grid_categories', catUpserts);
+        await repair('grid_categories', catDeletes);
+
+        if (cycleStartDayLastModified > 0 && cycleStartDayLastModified <= lastSyncedAt) {
+            const { data, error } = await supabase.from('grid_metadata').select('updated_at').eq('sync_id', config.syncId).maybeSingle();
+            if (error) throw error;
+            if (!data || data.updated_at <= cycleStartDayLastModified) {
+                cycleStartDayLastModified = repairTime++;
+                uploadSizeBytes += getPayloadSize({ cycleStartDay, updated_at: cycleStartDayLastModified });
+            } else cycleStartDayLastModified = 0;
+        }
+
         // Legacy imports have no trustworthy edit time. Cloud wins an ID collision;
         // otherwise the record gets a fresh timestamp so it can be uploaded safely.
         const uploadLegacy = async (table: string, records: any[], upserts: any[]) => {
