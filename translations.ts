@@ -56,7 +56,7 @@ export const translations = {
     secretKey: 'Secret Key',
     sync: 'Sync',
     debugDanger: 'Debug & Danger Zone',
-    clearData: 'Clear All Local Data',
+    clearData: 'Clear All Data',
     debugMock: 'Debug: Add Mock Data (200)',
     showDebug: 'Show Design Debugger',
     hideDebug: 'Hide Design Debugger',

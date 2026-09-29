@@ -16,35 +16,19 @@ import DesignDebugger, { DesignConfig } from './components/DesignDebugger';
 import CategoryManager from './components/CategoryManager';
 import DateRangeModal from './components/DateRangeModal';
 import * as SupabaseService from './services/supabaseService';
+import { getRecurringOccurrenceId } from './services/recurrence';
 import { APP_VERSION } from './version';
 import { translations } from './translations';
+import { validateBackup } from './services/backupValidation';
+import { addDateOnly, calculateBillingPeriod, dateOnlyToLocalDate, formatDateOnly, isDateOnlyAfter } from './services/dateOnly';
 
 // --- Utility Functions ---
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-const parseLocalDate = (dateStr: string): Date => {
-    if (!dateStr) return new Date();
-    const parts = dateStr.split('-');
-    return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-};
-
 const addTime = (date: string | Date, freq: Frequency, count: number): Date => {
-    let d = typeof date === 'string' ? parseLocalDate(date) : new Date(date);
-    if (isNaN(d.getTime())) d = new Date();
-    const startDay = d.getDate();
-
-    if (freq === Frequency.ONE_TIME) return d;
-    if (freq === Frequency.WEEKLY) d.setDate(d.getDate() + (7 * count));
-    if (freq === Frequency.MONTHLY) { 
-        d.setMonth(d.getMonth() + count); 
-        if (d.getDate() !== startDay) d.setDate(0); 
-    }
-    if (freq === Frequency.YEARLY) { 
-        d.setFullYear(d.getFullYear() + count); 
-        if (d.getDate() !== startDay) d.setDate(0); 
-    }
-    return d;
+    const value = typeof date === 'string' ? date : formatDateOnly(date);
+    return dateOnlyToLocalDate(addDateOnly(value, freq, count));
 };
 
 // --- Main Component ---
@@ -64,7 +48,7 @@ export default function App() {
         return { ...rest, description: desc, tags, createdAt };
     });
   });
-  
+
   const [plans, setPlans] = useState<RecurringPlan[]>(() => {
     const saved = localStorage.getItem('plans');
     let parsed: any[] = saved ? JSON.parse(saved) : [];
@@ -82,11 +66,20 @@ export default function App() {
       const saved = localStorage.getItem('cycleStartDay');
       return saved ? parseInt(saved, 10) : 1;
   });
+  const [cycleStartDayLastModified, setCycleStartDayLastModified] = useState<number>(() => Number(localStorage.getItem('cycleStartDayLastModified') || 0));
 
   const [deletedIds, setDeletedIds] = useState<{ [id: string]: number }>(() => {
       const saved = localStorage.getItem('deletedIds');
       return saved ? JSON.parse(saved) : {};
   });
+  const [transactionDeletedIds, setTransactionDeletedIds] = useState<Record<string, number>>(() => JSON.parse(localStorage.getItem('transactionDeletedIds') || '{}'));
+  const [planDeletedIds, setPlanDeletedIds] = useState<Record<string, number>>(() => JSON.parse(localStorage.getItem('planDeletedIds') || '{}'));
+  const [deletedCategoryIds, setDeletedCategoryIds] = useState<Record<string, number>>(() => JSON.parse(localStorage.getItem('deletedCategoryIds') || '{}'));
+  const [deletedCategoryNames, setDeletedCategoryNames] = useState<Record<string, string>>(() => JSON.parse(localStorage.getItem('deletedCategoryNames') || '{}'));
+  const setLocalCycleStartDay = (day: number) => {
+      setCycleStartDay(day);
+      setCycleStartDayLastModified(Date.now());
+  };
 
   // Persistent Category/Tag Definitions
   const [categoryDefs, setCategoryDefs] = useState<CategoryDef[]>(() => {
@@ -106,13 +99,13 @@ export default function App() {
                   id: Math.random().toString(36).substr(2, 9),
                   name: name,
                   color: colors[Math.floor(Math.random() * colors.length)],
-                  lastModified: now 
+                  lastModified: now
               });
           });
       }
       return cats;
   });
-  
+
   // --- State: Sync Config ---
   const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => {
       const saved = localStorage.getItem('syncConfig');
@@ -129,7 +122,7 @@ export default function App() {
       const saved = localStorage.getItem('theme');
       return saved ? saved === 'dark' : true;
   });
-  
+
   const [language, setLanguage] = useState<LanguageCode>(() => {
       const saved = localStorage.getItem('language');
       return (saved as LanguageCode) || 'en';
@@ -143,17 +136,17 @@ export default function App() {
   const [editingItem, setEditingItem] = useState<Transaction | RecurringPlan | null>(null);
   const [showPlanned, setShowPlanned] = useState(true);
   const [showHistory, setShowHistory] = useState(true);
-  
+
   // Global Filter/Sort State
   const [filterText, setFilterText] = useState('');
-  const [sortOption, setSortOption] = useState<SortOption>('date_asc'); 
+  const [sortOption, setSortOption] = useState<SortOption>('date_asc');
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
-  
+
   // Design Debugger State
   const [showDesignDebug, setShowDesignDebug] = useState(false);
-  const [designConfig, setDesignConfig] = useState<DesignConfig>({ 
-      fontSize: 11, 
+  const [designConfig, setDesignConfig] = useState<DesignConfig>({
+      fontSize: 11,
       paddingY: 0.1,
       fontWeightDesc: 500,
       fontWeightAmount: 700,
@@ -164,18 +157,31 @@ export default function App() {
   const [shiftCycleDialog, setShiftCycleDialog] = useState<{ isOpen: boolean, planId: string, newDate: Date } | null>(null);
   const [transitionState, setTransitionState] = useState<{ isOpen: boolean, targetDate: Date, pendingItems: { plan: RecurringPlan, due: Date }[] } | null>(null);
   const [isClearDataConfirmOpen, setIsClearDataConfirmOpen] = useState(false);
+  const [isClearingData, setIsClearingData] = useState(false);
+  const [clearDataError, setClearDataError] = useState('');
 
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('offline');
+  const [syncAuthUserId, setSyncAuthUserId] = useState<string | null>(null);
+  const [syncAuthEmail, setSyncAuthEmail] = useState<string | null>(null);
+  const [syncAuthLoading, setSyncAuthLoading] = useState(true);
   const [syncStats, setSyncStats] = useState<{ up: number, down: number } | null>(null);
   const syncTimeoutRef = useRef<number | null>(null);
   const isSyncingRef = useRef(false);
+  const syncPendingRef = useRef(false);
+  const isClearingDataRef = useRef(false);
+  const clearDataSyncBlockedRef = useRef(false);
   const isFirstMount = useRef(true);
 
   // --- Effects: Persistence ---
   useEffect(() => { localStorage.setItem('transactions', JSON.stringify(transactions)); }, [transactions]);
   useEffect(() => { localStorage.setItem('plans', JSON.stringify(plans)); }, [plans]);
   useEffect(() => { localStorage.setItem('cycleStartDay', cycleStartDay.toString()); }, [cycleStartDay]);
+  useEffect(() => { localStorage.setItem('cycleStartDayLastModified', String(cycleStartDayLastModified)); }, [cycleStartDayLastModified]);
   useEffect(() => { localStorage.setItem('deletedIds', JSON.stringify(deletedIds)); }, [deletedIds]);
+  useEffect(() => { localStorage.setItem('transactionDeletedIds', JSON.stringify(transactionDeletedIds)); }, [transactionDeletedIds]);
+  useEffect(() => { localStorage.setItem('planDeletedIds', JSON.stringify(planDeletedIds)); }, [planDeletedIds]);
+  useEffect(() => { localStorage.setItem('deletedCategoryIds', JSON.stringify(deletedCategoryIds)); }, [deletedCategoryIds]);
+  useEffect(() => { localStorage.setItem('deletedCategoryNames', JSON.stringify(deletedCategoryNames)); }, [deletedCategoryNames]);
   useEffect(() => { localStorage.setItem('categoryDefs', JSON.stringify(categoryDefs)); }, [categoryDefs]);
   useEffect(() => { localStorage.setItem('syncConfig', JSON.stringify(syncConfig)); }, [syncConfig]);
   useEffect(() => { localStorage.setItem('theme', isDarkMode ? 'dark' : 'light'); }, [isDarkMode]);
@@ -203,9 +209,10 @@ export default function App() {
         usedTags.forEach(tagName => {
             const normalized = tagName.trim();
             if (!normalized) return;
-            
+
             // Check if exists (case insensitive)
-            if (!newDefs.some(d => d.name.toLowerCase() === normalized.toLowerCase())) {
+            if (!newDefs.some(d => d.name.toLowerCase() === normalized.toLowerCase()) &&
+                !Object.values(stateRef.current.deletedCategoryNames).some(name => name.toLowerCase() === normalized.toLowerCase())) {
                 newDefs.push({
                     id: Math.random().toString(36).substr(2, 9),
                     name: normalized,
@@ -215,101 +222,180 @@ export default function App() {
                 changed = true;
             }
         });
-        
+
         return changed ? newDefs : prev;
     });
   }, [transactions, plans]);
 
   // --- Sync Logic ---
-  const stateRef = useRef({ transactions, plans, cycleStartDay, deletedIds, categoryDefs, syncConfig });
-  useEffect(() => {
-      stateRef.current = { transactions, plans, cycleStartDay, deletedIds, categoryDefs, syncConfig };
-  }, [transactions, plans, cycleStartDay, deletedIds, categoryDefs, syncConfig]);
+  const stateRef = useRef({ transactions, plans, cycleStartDay, cycleStartDayLastModified, deletedIds, transactionDeletedIds, planDeletedIds, deletedCategoryIds, deletedCategoryNames, categoryDefs, syncConfig });
+  // Keep the ref current during render so async sync continuations see the
+  // latest committed state, rather than a snapshot from before a network wait.
+  stateRef.current = { transactions, plans, cycleStartDay, cycleStartDayLastModified, deletedIds, transactionDeletedIds, planDeletedIds, deletedCategoryIds, deletedCategoryNames, categoryDefs, syncConfig };
 
   const triggerSync = useCallback(async () => {
       const currentConfig = stateRef.current.syncConfig;
       if (!currentConfig.enabled || !currentConfig.syncId) return;
-      if (isSyncingRef.current) return;
-      
+      if (isSyncingRef.current) { syncPendingRef.current = true; return; }
+      if (isClearingDataRef.current || clearDataSyncBlockedRef.current) return;
+
       // Check online status first to avoid "NetworkError" logs
       if (!navigator.onLine) {
           setSyncStatus('offline');
           return;
       }
-      
+
       isSyncingRef.current = true;
       setSyncStatus('syncing');
       setSyncStats(null);
-      
-      const currentLocalState = stateRef.current;
+
       const lastSyncedAt = currentConfig.lastSyncedAt || 0;
       const syncStartTime = Date.now();
-      
+
       let downSize = 0;
       let upSize = 0;
+      let shouldResync = false;
 
       try {
+          const sameSyncTarget = (a: SyncConfig, b: SyncConfig) =>
+              a.enabled === b.enabled && a.syncId === b.syncId &&
+              a.supabaseUrl === b.supabaseUrl && a.supabaseKey === b.supabaseKey;
+
           // 1. PULL
-          const remoteChanges = await SupabaseService.pullChanges(currentConfig, lastSyncedAt);
-          
-          let mergedTransactions = currentLocalState.transactions;
-          let mergedPlans = currentLocalState.plans;
-          let mergedDeletedIds = currentLocalState.deletedIds;
-          let mergedCategories = currentLocalState.categoryDefs;
-          let mergedCycleDay = currentLocalState.cycleStartDay;
+          const pullResult = await SupabaseService.pullChanges(currentConfig, lastSyncedAt);
 
-          if (remoteChanges) {
-              downSize = remoteChanges.downloadSizeBytes || 0;
-              const merged = SupabaseService.mergeDeltas(
-                  { 
-                      transactions: currentLocalState.transactions, 
-                      plans: currentLocalState.plans, 
-                      cycleStartDay: currentLocalState.cycleStartDay, 
-                      deletedIds: currentLocalState.deletedIds,
-                      categoryDefs: currentLocalState.categoryDefs,
-                      lastModified: 0 
-                  }, 
-                  remoteChanges
-              );
-              mergedTransactions = merged.transactions;
-              mergedPlans = merged.plans;
-              mergedDeletedIds = merged.deletedIds || {};
-              mergedCategories = merged.categoryDefs || [];
-              mergedCycleDay = merged.cycleStartDay;
-
-              const hasChanges = 
-                  mergedTransactions.length !== currentLocalState.transactions.length ||
-                  JSON.stringify(mergedTransactions) !== JSON.stringify(currentLocalState.transactions) ||
-                  JSON.stringify(mergedPlans) !== JSON.stringify(currentLocalState.plans) ||
-                  JSON.stringify(mergedCategories) !== JSON.stringify(currentLocalState.categoryDefs) ||
-                  mergedCycleDay !== currentLocalState.cycleStartDay;
-
-              if (hasChanges) {
-                  setTransactions(mergedTransactions);
-                  setPlans(mergedPlans);
-                  setCategoryDefs(mergedCategories);
-                  setCycleStartDay(mergedCycleDay);
-                  setDeletedIds(mergedDeletedIds);
-              }
+          if (!sameSyncTarget(stateRef.current.syncConfig, currentConfig)) {
+              shouldResync = true;
+              return;
           }
+
+          if (!pullResult.success) {
+              if (!navigator.onLine) setSyncStatus('offline');
+              else setSyncStatus('error');
+              return;
+          }
+
+          // State may have changed while pullChanges was awaiting the network.
+          const latestLocalState = stateRef.current;
+
+          const remoteChanges = pullResult.changes;
+          const localTransactionTimes = new Map(latestLocalState.transactions.map(item => [item.id, item.lastModified || 0]));
+          const localPlanTimes = new Map(latestLocalState.plans.map(item => [item.id, item.lastModified || 0]));
+          const forceUploadIds = {
+              transactions: remoteChanges.transactions
+                  .filter(row => row.deleted && (localTransactionTimes.get(row.id) || 0) > row.updated_at)
+                  .map(row => row.id),
+              plans: remoteChanges.plans
+                  .filter(row => row.deleted && (localPlanTimes.get(row.id) || 0) > row.updated_at)
+                  .map(row => row.id)
+          };
+
+          let mergedTransactions = latestLocalState.transactions;
+          let mergedPlans = latestLocalState.plans;
+          let mergedDeletedIds = latestLocalState.deletedIds;
+          let mergedCategories = latestLocalState.categoryDefs;
+          let mergedCycleDay = latestLocalState.cycleStartDay;
+
+          downSize = remoteChanges.downloadSizeBytes || 0;
+          const merged = SupabaseService.mergeDeltas(
+              {
+                  transactions: latestLocalState.transactions,
+                  plans: latestLocalState.plans,
+              cycleStartDay: latestLocalState.cycleStartDay,
+              cycleStartDayLastModified: latestLocalState.cycleStartDayLastModified,
+              deletedIds: latestLocalState.deletedIds,
+              transactionDeletedIds: latestLocalState.transactionDeletedIds,
+              planDeletedIds: latestLocalState.planDeletedIds,
+              deletedCategoryIds: latestLocalState.deletedCategoryIds,
+              deletedCategoryNames: latestLocalState.deletedCategoryNames,
+                  categoryDefs: latestLocalState.categoryDefs,
+                  lastModified: 0
+              },
+              remoteChanges
+          );
+          mergedTransactions = merged.transactions;
+          mergedPlans = merged.plans;
+          mergedDeletedIds = merged.deletedIds || {};
+          mergedCategories = merged.categoryDefs || [];
+          mergedCycleDay = merged.cycleStartDay;
+
+          const hasChanges =
+              mergedTransactions.length !== latestLocalState.transactions.length ||
+              JSON.stringify(mergedTransactions) !== JSON.stringify(latestLocalState.transactions) ||
+              JSON.stringify(mergedPlans) !== JSON.stringify(latestLocalState.plans) ||
+              JSON.stringify(mergedCategories) !== JSON.stringify(latestLocalState.categoryDefs) ||
+              JSON.stringify(mergedDeletedIds) !== JSON.stringify(latestLocalState.deletedIds) ||
+              JSON.stringify(merged.transactionDeletedIds) !== JSON.stringify(latestLocalState.transactionDeletedIds) ||
+              JSON.stringify(merged.planDeletedIds) !== JSON.stringify(latestLocalState.planDeletedIds) ||
+              JSON.stringify(merged.deletedCategoryIds) !== JSON.stringify(latestLocalState.deletedCategoryIds) ||
+              JSON.stringify(merged.deletedCategoryNames) !== JSON.stringify(latestLocalState.deletedCategoryNames) ||
+              merged.cycleStartDayLastModified !== latestLocalState.cycleStartDayLastModified ||
+              mergedCycleDay !== latestLocalState.cycleStartDay;
+
+          if (hasChanges) {
+              setTransactions(mergedTransactions);
+              setPlans(mergedPlans);
+              setCategoryDefs(mergedCategories);
+              setCycleStartDay(mergedCycleDay);
+              setDeletedIds(mergedDeletedIds);
+              setTransactionDeletedIds(merged.transactionDeletedIds || {});
+              setPlanDeletedIds(merged.planDeletedIds || {});
+              setDeletedCategoryIds(merged.deletedCategoryIds || {});
+              setDeletedCategoryNames(merged.deletedCategoryNames || {});
+              setCycleStartDayLastModified(merged.cycleStartDayLastModified || 0);
+          }
+
+          // Make this merged state visible to any code that reads the ref
+          // before React runs the next passive effect.
+          stateRef.current = {
+              ...latestLocalState,
+              transactions: mergedTransactions,
+              plans: mergedPlans,
+              deletedIds: mergedDeletedIds,
+              transactionDeletedIds: merged.transactionDeletedIds || latestLocalState.transactionDeletedIds,
+              planDeletedIds: merged.planDeletedIds || latestLocalState.planDeletedIds,
+              deletedCategoryIds: merged.deletedCategoryIds || latestLocalState.deletedCategoryIds,
+              deletedCategoryNames: merged.deletedCategoryNames || latestLocalState.deletedCategoryNames,
+              cycleStartDayLastModified: merged.cycleStartDayLastModified || latestLocalState.cycleStartDayLastModified,
+              categoryDefs: mergedCategories,
+              cycleStartDay: mergedCycleDay
+          };
 
           // 2. PUSH
           // Use merged data (or current if no merge) for push to ensure we are up to date
           const { success, uploadSizeBytes } = await SupabaseService.pushChanges(
-              currentConfig, 
-              mergedTransactions, 
-              mergedPlans, 
+              currentConfig,
+              mergedTransactions,
+              mergedPlans,
               mergedCategories,
-              mergedDeletedIds, 
-              mergedCycleDay, 
-              lastSyncedAt
+              mergedDeletedIds,
+              mergedCycleDay,
+              lastSyncedAt,
+              forceUploadIds,
+              merged.transactionDeletedIds || latestLocalState.transactionDeletedIds,
+              merged.planDeletedIds || latestLocalState.planDeletedIds,
+              merged.deletedCategoryIds || latestLocalState.deletedCategoryIds,
+              merged.cycleStartDayLastModified || latestLocalState.cycleStartDayLastModified,
+              merged.deletedCategoryNames || latestLocalState.deletedCategoryNames
           );
-          
+
           upSize = uploadSizeBytes;
-          
+
+          // Do not let an in-flight request for an old sync ID advance the
+          // watermark for a newly selected sync target.
+          if (!sameSyncTarget(stateRef.current.syncConfig, currentConfig)) {
+              shouldResync = true;
+              return;
+          }
+
           if (success) {
             setSyncStatus('synced');
-            setSyncConfig(prev => ({ ...prev, lastSyncedAt: syncStartTime }));
+            // Keep changes stamped in the same millisecond as sync start
+            // eligible for a follow-up push (push uses a strict > filter).
+            const completedThrough = Math.max(lastSyncedAt, syncStartTime - 1);
+            setSyncConfig(prev => sameSyncTarget(prev, currentConfig)
+                ? { ...prev, lastSyncedAt: completedThrough }
+                : prev);
             setSyncStats({ up: upSize, down: downSize });
           } else {
              // If push failed but not thrown (handled in service), check online
@@ -321,14 +407,33 @@ export default function App() {
           setSyncStatus('error');
       } finally {
           isSyncingRef.current = false;
+          const rerun = shouldResync || syncPendingRef.current;
+          syncPendingRef.current = false;
+          if (rerun) window.setTimeout(() => triggerSync(), 0);
       }
-  }, []); 
+  }, []);
 
   useEffect(() => {
-      if (syncConfig.enabled && syncConfig.supabaseUrl && syncConfig.supabaseKey) {
+      if (syncConfig.supabaseUrl && syncConfig.supabaseKey) {
           SupabaseService.initSupabase(syncConfig.supabaseUrl, syncConfig.supabaseKey);
-          triggerSync();
+          let active = true;
+          setSyncAuthLoading(true);
+          SupabaseService.getAuthUser().then(user => {
+              if (!active) return;
+              setSyncAuthUserId(user?.id || null);
+              setSyncAuthEmail(user?.email || null);
+          }).finally(() => { if (active) setSyncAuthLoading(false); });
+          const unsubscribe = SupabaseService.subscribeAuth(user => {
+              setSyncAuthUserId(user?.id || null);
+              setSyncAuthEmail(user?.email || null);
+              if (user && stateRef.current.syncConfig.enabled) window.setTimeout(() => triggerSync(), 0);
+          });
+          if (syncConfig.enabled) triggerSync();
+          return () => { active = false; unsubscribe(); };
       } else {
+          setSyncAuthLoading(false);
+          setSyncAuthUserId(null);
+          setSyncAuthEmail(null);
           setSyncStatus('offline');
       }
   }, [syncConfig.enabled, syncConfig.supabaseUrl, syncConfig.supabaseKey, syncConfig.syncId, triggerSync]);
@@ -337,7 +442,7 @@ export default function App() {
       if (isFirstMount.current) { isFirstMount.current = false; return; }
       if (!syncConfig.enabled) return;
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-      
+
       const attemptSync = () => {
           if (navigator.onLine) {
               triggerSync();
@@ -346,9 +451,9 @@ export default function App() {
           }
       };
 
-      syncTimeoutRef.current = window.setTimeout(attemptSync, 3000); 
+      syncTimeoutRef.current = window.setTimeout(attemptSync, 3000);
       return () => { if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current); }
-  }, [transactions, plans, cycleStartDay, deletedIds, categoryDefs, triggerSync, syncConfig.enabled]); 
+  }, [transactions, plans, cycleStartDay, deletedIds, transactionDeletedIds, planDeletedIds, deletedCategoryIds, deletedCategoryNames, categoryDefs, triggerSync, syncConfig.enabled]);
 
   useEffect(() => {
       const handleVisibilityChange = () => {
@@ -371,28 +476,14 @@ export default function App() {
       };
   }, [syncConfig.enabled, triggerSync]);
 
-  const calculatePeriod = (anchor: Date, startDay: number) => {
-    const d = new Date(anchor); d.setHours(0,0,0,0);
-    let start = new Date(d.getFullYear(), d.getMonth(), startDay);
-    if (d.getDate() < startDay) {
-        start = new Date(d.getFullYear(), d.getMonth() - 1, startDay);
-        if (start.getDate() !== startDay) start = new Date(d.getFullYear(), d.getMonth() - 1 + 1, 0);
-    } else {
-        if (start.getDate() !== startDay) start = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-    }
-    const end = new Date(start); 
-    end.setMonth(end.getMonth() + 1); 
-    end.setDate(end.getDate() - 1); 
-    end.setHours(23, 59, 59, 999);
-    return { start, end };
-  };
-
   const snapshot: FinancialSnapshot = useMemo(() => {
     const currentBalance = transactions.reduce((acc, t) => t.type === 'income' ? acc + t.amount : acc - t.amount, 0);
-    const { start: periodStart, end: periodEnd } = calculatePeriod(viewDate, cycleStartDay);
+    const { start: periodStart, end: periodEnd } = calculateBillingPeriod(viewDate, cycleStartDay);
+    const periodStartDate = formatDateOnly(periodStart);
+    const periodEndDate = formatDateOnly(periodEnd);
 
-    let projectedBalance = currentBalance; 
-    let upcomingIncome = 0; 
+    let projectedBalance = currentBalance;
+    let upcomingIncome = 0;
     let upcomingExpenses = 0;
 
     plans.forEach(plan => {
@@ -402,17 +493,17 @@ export default function App() {
 
         while (safety < 100) {
             safety++;
-            const currentDate = new Date(simDate); currentDate.setHours(0,0,0,0);
-            
-            if (currentDate > periodEnd) break;
+            const currentDate = formatDateOnly(simDate);
+
+            if (currentDate > periodEndDate) break;
             if (plan.maxOccurrences && simCount >= plan.maxOccurrences) break;
-            if (plan.endDate && currentDate > new Date(plan.endDate)) break;
-            
-            if (currentDate >= periodStart) {
-                if (plan.type === 'income') { upcomingIncome += plan.amount; projectedBalance += plan.amount; } 
+            if (plan.endDate && isDateOnlyAfter(currentDate, plan.endDate)) break;
+
+            if (currentDate >= periodStartDate) {
+                if (plan.type === 'income') { upcomingIncome += plan.amount; projectedBalance += plan.amount; }
                 else { upcomingExpenses += plan.amount; projectedBalance -= plan.amount; }
             }
-            simCount++; 
+            simCount++;
             simDate = addTime(plan.startDate, plan.frequency, simCount);
             if (plan.frequency === Frequency.ONE_TIME) break;
         }
@@ -425,14 +516,54 @@ export default function App() {
       setIsClearDataConfirmOpen(true);
   };
 
-  const performClearData = () => {
+  const performClearData = async () => {
+      setClearDataError('');
+      const currentConfig = stateRef.current.syncConfig;
+      if (currentConfig.enabled) {
+          if (!currentConfig.syncId || !currentConfig.supabaseUrl || !currentConfig.supabaseKey) {
+              setClearDataError('Cloud clear failed: sync is not fully configured. Your local data is unchanged.');
+              return;
+          }
+          if (!navigator.onLine) {
+              setSyncStatus('offline');
+              setClearDataError('You are offline. Cloud data was not deleted, and your local data is unchanged. Reconnect and retry.');
+              return;
+          }
+          if (isSyncingRef.current) {
+              setClearDataError('A sync is still in progress. Wait for it to finish, then retry. Your data is unchanged.');
+              return;
+          }
+          isClearingDataRef.current = true;
+          clearDataSyncBlockedRef.current = true;
+          setIsClearingData(true);
+          SupabaseService.initSupabase(currentConfig.supabaseUrl, currentConfig.supabaseKey);
+          const result = await SupabaseService.clearSyncData(currentConfig);
+          isClearingDataRef.current = false;
+          setIsClearingData(false);
+          const latestConfig = stateRef.current.syncConfig;
+          const sameTarget = latestConfig.enabled && latestConfig.syncId === currentConfig.syncId &&
+              latestConfig.supabaseUrl === currentConfig.supabaseUrl && latestConfig.supabaseKey === currentConfig.supabaseKey;
+          if (!result.success || !sameTarget) {
+              setSyncStatus('error');
+              setClearDataError(result.success
+                  ? 'Sync settings changed before clear completed. The selected local data is unchanged; verify the previous sync partition and retry.'
+                  : 'Cloud clear did not complete. Some remote records may already be tombstoned. Your local data is unchanged; retry to finish clearing.');
+              return;
+          }
+          clearDataSyncBlockedRef.current = false;
+      }
       setTransactions([]);
       setPlans([]);
       setDeletedIds({});
+      setTransactionDeletedIds({});
+      setPlanDeletedIds({});
+      setDeletedCategoryIds({});
+      setDeletedCategoryNames({});
       setCategoryDefs([]); // Reset Categories too
-      setCycleStartDay(1);
+      setLocalCycleStartDay(1);
       setSyncConfig(prev => ({ ...prev, lastSyncedAt: 0 }));
       setIsClearDataConfirmOpen(false);
+      setClearDataError('');
   };
 
   const handleAddMockData = () => {
@@ -440,7 +571,7 @@ export default function App() {
       const newPlans: RecurringPlan[] = [];
       const now = Date.now();
       const mockCats = ['Food', 'Transport', 'Housing', 'Utilities'];
-      
+
       // Add Mock categories if they don't exist
       const newCatDefs = [...categoryDefs];
       const colors = ['red', 'blue', 'green', 'amber'];
@@ -457,7 +588,7 @@ export default function App() {
           const cat = mockCats[Math.floor(Math.random() * mockCats.length)];
           newTxs.push({
               id: generateId(),
-              date: new Date(Date.now() - Math.random() * 31536000000).toISOString().split('T')[0], 
+              date: formatDateOnly(new Date(Date.now() - Math.random() * 31536000000)),
               description: desc,
               amount: parseFloat((Math.random() * 1000).toFixed(2)),
               type: type,
@@ -472,7 +603,7 @@ export default function App() {
               amount: parseFloat((Math.random() * 500).toFixed(2)),
               type: type,
               frequency: Frequency.MONTHLY,
-              startDate: new Date(Date.now() + Math.random() * 31536000000).toISOString().split('T')[0],
+              startDate: formatDateOnly(new Date(Date.now() + Math.random() * 31536000000)),
               occurrencesGenerated: 0,
               tags: [cat],
               maxOccurrences: Math.random() > 0.8 ? 12 : undefined,
@@ -491,6 +622,11 @@ export default function App() {
         plans,
         cycleStartDay,
         deletedIds,
+        transactionDeletedIds,
+        planDeletedIds,
+        deletedCategoryIds,
+        deletedCategoryNames,
+        cycleStartDayLastModified,
         categoryDefs,
         exportDate: new Date().toISOString(),
         version: 1
@@ -509,51 +645,24 @@ export default function App() {
   const handleImportData = async (file: File) => {
     try {
         const text = await file.text();
-        const data = JSON.parse(text);
-        if (!Array.isArray(data.transactions) || !Array.isArray(data.plans)) { alert("Invalid backup file format."); return; }
-        if (window.confirm(`Found ${data.transactions.length} transactions and ${data.plans.length} plans. This will OVERWRITE your current local data. Continue?`)) {
-            const now = Date.now();
-            const importedTx = data.transactions.map((t: any) => {
-                 const desc = t.name || t.description || 'Unknown';
-                 const { name, category, ...rest } = t;
-                 const tags = t.tags ? t.tags : (category ? [category] : []);
-                 // Preserve createdAt or backfill
-                 const createdAt = t.createdAt || t.lastModified || now;
-                 return { ...rest, description: desc, tags, createdAt };
-            });
-             const importedPlans = data.plans.map((p: any) => {
-                 const desc = p.name || p.description || 'Unknown';
-                 const { name, category, ...rest } = p;
-                 const tags = p.tags ? p.tags : (category ? [category] : []);
-                 const createdAt = p.createdAt || p.lastModified || now;
-                 return { ...rest, description: desc, tags, createdAt };
-            });
-
-            if (data.categoryDefs && Array.isArray(data.categoryDefs)) {
-                // Ensure imports have timestamps
-                const cats = data.categoryDefs.map((c: any) => ({ ...c, lastModified: c.lastModified || now }));
-                setCategoryDefs(cats);
-            } else if (data.savedCategories) {
-                // Legacy Import Migration
-                 const cats: CategoryDef[] = [];
-                 const colors = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
-                 data.savedCategories.forEach((name: string) => {
-                    cats.push({ id: generateId(), name: name, color: colors[Math.floor(Math.random() * colors.length)], lastModified: now });
-                 });
-                 setCategoryDefs(cats);
-            }
-
-            setTransactions(importedTx);
-            setPlans(importedPlans);
-            if (data.cycleStartDay) setCycleStartDay(data.cycleStartDay);
-            if (data.deletedIds) setDeletedIds(data.deletedIds);
+        const imported = validateBackup(JSON.parse(text));
+        if (window.confirm(`Found ${imported.transactions.length} transactions and ${imported.plans.length} plans. This will OVERWRITE your current local data. Continue?`)) {
+            setTransactions(imported.transactions);
+            setPlans(imported.plans);
+            setCycleStartDay(imported.cycleStartDay);
+            setDeletedIds(imported.deletedIds);
+            setTransactionDeletedIds(imported.transactionDeletedIds || {});
+            setPlanDeletedIds(imported.planDeletedIds || {});
+            setDeletedCategoryIds(imported.deletedCategoryIds || {});
+            setDeletedCategoryNames(imported.deletedCategoryNames || {});
+            setCycleStartDayLastModified(imported.cycleStartDayLastModified || 0);
+            if (imported.categoryDefs !== undefined) setCategoryDefs(imported.categoryDefs);
             setSyncConfig(prev => ({ ...prev, lastSyncedAt: 0 }));
             setIsSettingsOpen(false);
             alert("Import successful.");
         }
     } catch (e) {
-        console.error(e);
-        alert("Failed to parse backup file.");
+        alert("Import failed: the file is not a valid GridFinance backup or contains invalid data. Your data was not changed.");
     }
   };
 
@@ -562,7 +671,7 @@ export default function App() {
         setTransactions([]);
         setPlans([]);
         setDeletedIds({});
-        setCycleStartDay(1);
+        setLocalCycleStartDay(1);
     }
     setSyncConfig(newConfig);
   };
@@ -623,7 +732,7 @@ export default function App() {
         if (data.kind === 'single') {
             const newTx: Transaction = {
                 id: generateId(), date: data.date, description: finalDescription, amount: data.amount,
-                type: data.type, tags: finalTags, isPaid: true, 
+                type: data.type, tags: finalTags, isPaid: true,
                 createdAt: now,
                 lastModified: now
             };
@@ -634,11 +743,11 @@ export default function App() {
             const finalPlanStartDate = data.isLoan ? (data.planStartDate || data.date) : data.date;
 
             const newPlan: RecurringPlan = {
-                id: generateId(), description: finalDescription, 
-                amount: finalPlanAmount, 
+                id: generateId(), description: finalDescription,
+                amount: finalPlanAmount,
                 type: data.type,
                 frequency: data.frequency, startDate: finalPlanStartDate, occurrencesGenerated: 0, tags: finalTags,
-                maxOccurrences: data.maxOccurrences, 
+                maxOccurrences: data.maxOccurrences,
                 createdAt: now,
                 lastModified: now
             };
@@ -647,10 +756,10 @@ export default function App() {
             if (data.isLoan) {
                 const totalAmount = data.amount;
                 const reverseType = data.type === 'expense' ? 'income' : 'expense';
-                
+
                 const principalTx: Transaction = {
                     id: generateId(),
-                    date: data.date, 
+                    date: data.date,
                     description: `Loan Principal: ${finalDescription}`,
                     amount: totalAmount,
                     type: reverseType,
@@ -670,27 +779,27 @@ export default function App() {
     if (!plan) return;
     const now = Date.now();
     const dateStr = applyDate.getFullYear() + '-' + String(applyDate.getMonth() + 1).padStart(2, '0') + '-' + String(applyDate.getDate()).padStart(2, '0');
-    
+
     const newTx: Transaction = {
-        id: generateId(), date: dateStr, description: plan.description,
-        amount: plan.amount, type: plan.type, tags: plan.tags, isPaid: false, relatedPlanId: plan.id, 
+        id: getRecurringOccurrenceId(plan.id, dateStr), date: dateStr, description: plan.description,
+        amount: plan.amount, type: plan.type, tags: plan.tags, isPaid: false, relatedPlanId: plan.id,
         createdAt: now,
         lastModified: now
     };
     setTransactions(prev => [newTx, ...prev]);
-    
+
     if (plan.frequency === Frequency.ONE_TIME) {
-        setDeletedIds(prev => ({ ...prev, [planId]: now }));
+        setPlanDeletedIds(prev => ({ ...prev, [planId]: now }));
         setPlans(prev => prev.filter(p => p.id !== planId));
     } else {
         setPlans(prev => prev.map(p => p.id === planId ? { ...p, occurrencesGenerated: p.occurrencesGenerated + 1, lastModified: now } : p));
     }
   };
 
-  const handleUpdateBillingDate = (newDate: Date) => { 
+  const handleUpdateBillingDate = (newDate: Date) => {
     const currentPeriod = snapshot;
-    const { start: newPeriodStart } = calculatePeriod(newDate, newDate.getDate()); 
-    
+    const { start: newPeriodStart } = calculateBillingPeriod(newDate, newDate.getDate());
+
     if (newPeriodStart > currentPeriod.periodStart) {
         const pending: { plan: RecurringPlan, due: Date }[] = [];
         const today = new Date(); today.setHours(0,0,0,0);
@@ -711,8 +820,8 @@ export default function App() {
             return;
         }
     }
-    setCycleStartDay(newDate.getDate()); 
-    setViewDate(newDate); 
+    setLocalCycleStartDay(newDate.getDate());
+    setViewDate(newDate);
   };
 
   const handleResolveTransitionItem = (planId: string, action: 'move' | 'paid' | 'cancel') => {
@@ -722,7 +831,7 @@ export default function App() {
       if (!item) return;
       const now = Date.now();
 
-      if (action === 'paid') { executePlanApplication(planId, item.due); } 
+      if (action === 'paid') { executePlanApplication(planId, item.due); }
       else if (action === 'cancel') {
           const plan = plans.find(p => p.id === planId);
           if (plan) {
@@ -757,7 +866,7 @@ export default function App() {
 
   const handleFinishTransition = () => {
       if (transitionState) {
-          setCycleStartDay(transitionState.targetDate.getDate());
+          setLocalCycleStartDay(transitionState.targetDate.getDate());
           setViewDate(transitionState.targetDate);
           setTransitionState(null);
       }
@@ -767,13 +876,13 @@ export default function App() {
     const plan = plans.find(p => p.id === planId);
     if (!plan) return;
     if (plan.maxOccurrences && plan.occurrencesGenerated >= plan.maxOccurrences) { alert("Max payments reached."); return; }
-    
+
     const newDate = addTime(plan.startDate, plan.frequency, plan.occurrencesGenerated); newDate.setHours(0,0,0,0);
     const currentPeriodEnd = new Date(snapshot.periodEnd); currentPeriodEnd.setHours(23, 59, 59, 999);
-    const nextPeriodEnd = new Date(currentPeriodEnd); nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 1);
-    
+    const nextPeriodEnd = calculateBillingPeriod(new Date(snapshot.periodEnd.getFullYear(), snapshot.periodEnd.getMonth() + 1, 1), cycleStartDay).end;
+
     if (newDate > nextPeriodEnd) { alert(`Too far: ${newDate.toLocaleDateString()}`); return; }
-    if (newDate > currentPeriodEnd) { setShiftCycleDialog({ isOpen: true, planId, newDate }); } 
+    if (newDate > currentPeriodEnd) { setShiftCycleDialog({ isOpen: true, planId, newDate }); }
     else { executePlanApplication(planId, newDate); }
   };
 
@@ -786,16 +895,16 @@ export default function App() {
             return p;
         }));
     }
-    setDeletedIds(prev => ({ ...prev, [id]: now }));
+    setTransactionDeletedIds(prev => ({ ...prev, [id]: now }));
     setTransactions(prev => prev.filter(t => t.id !== id));
   };
-  
-  const deletePlan = (id: string) => { 
-      setDeletedIds(prev => ({ ...prev, [id]: Date.now() }));
-      setPlans(prev => prev.filter(p => p.id !== id)); 
+
+  const deletePlan = (id: string) => {
+      setTransactionDeletedIds(prev => ({ ...prev, [id]: Date.now() }));
+      setPlans(prev => prev.filter(p => p.id !== id));
   };
 
-  const handleConfirmShiftCycle = () => { if (shiftCycleDialog) { setCycleStartDay(shiftCycleDialog.newDate.getDate()); setViewDate(shiftCycleDialog.newDate); executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate); setShiftCycleDialog(null); } };
+  const handleConfirmShiftCycle = () => { if (shiftCycleDialog) { setLocalCycleStartDay(shiftCycleDialog.newDate.getDate()); setViewDate(shiftCycleDialog.newDate); executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate); setShiftCycleDialog(null); } };
   const handleAlternativeKeepCycle = () => { if (shiftCycleDialog) { executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate); setShiftCycleDialog(null); } };
 
   // Translations helper
@@ -804,28 +913,28 @@ export default function App() {
   return (
     <div className="min-h-screen pb-20 bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-300 font-sans transition-colors relative">
       <SummaryBar snapshot={snapshot} onUpdateDate={handleUpdateBillingDate} syncStatus={syncStatus} language={language} />
-      
+
       <main className="max-w-4xl mx-auto px-4">
-        <FilterBar 
-            filterText={filterText} onFilterChange={setFilterText} 
-            sortOption={sortOption} onSortChange={setSortOption} 
+        <FilterBar
+            filterText={filterText} onFilterChange={setFilterText}
+            sortOption={sortOption} onSortChange={setSortOption}
             onOpenDateFilter={() => setIsDateFilterOpen(true)}
             hasDateFilter={!!(filterStartDate || filterEndDate)}
             language={language}
         />
-        
+
         {plans.length > 0 && (
             <div className="mb-4">
                 <div className="flex items-center gap-2 mb-1 cursor-pointer group select-none" onClick={() => setShowPlanned(!showPlanned)}>
                     <svg className="w-2.5 h-2.5 text-gray-500 dark:text-gray-600 transition-transform duration-200" style={{ transform: showPlanned ? 'rotate(90deg)' : 'rotate(0deg)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
                     <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest group-hover:text-gray-800 dark:group-hover:text-gray-300 transition-colors">{t.planned}</h3>
                 </div>
-                {showPlanned && <PlanList 
-                    plans={plans} 
-                    onDelete={deletePlan} 
-                    onEdit={(p) => { setEditingItem(p); setIsModalOpen(true); }} 
-                    onApplyNow={handleApplyPlanNow} 
-                    currentPeriodEnd={snapshot.periodEnd} 
+                {showPlanned && <PlanList
+                    plans={plans}
+                    onDelete={deletePlan}
+                    onEdit={(p) => { setEditingItem(p); setIsModalOpen(true); }}
+                    onApplyNow={handleApplyPlanNow}
+                    currentPeriodEnd={snapshot.periodEnd}
                     filterText={filterText}
                     sortOption={sortOption}
                     designConfig={designConfig}
@@ -842,10 +951,10 @@ export default function App() {
                  <svg className="w-2.5 h-2.5 text-gray-500 dark:text-gray-600 transition-transform duration-200" style={{ transform: showHistory ? 'rotate(90deg)' : 'rotate(0deg)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
                  <h1 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest group-hover:text-gray-800 dark:group-hover:text-gray-200 transition-colors">{t.history}</h1>
             </div>
-            {showHistory && <TransactionGrid 
-                transactions={transactions} 
-                onDelete={deleteTransaction} 
-                onEdit={(t) => { setEditingItem(t); setIsModalOpen(true); }} 
+            {showHistory && <TransactionGrid
+                transactions={transactions}
+                onDelete={deleteTransaction}
+                onEdit={(t) => { setEditingItem(t); setIsModalOpen(true); }}
                 filterText={filterText}
                 sortOption={sortOption}
                 designConfig={designConfig}
@@ -860,8 +969,8 @@ export default function App() {
       <div className="fixed bottom-1 w-full flex justify-center pointer-events-none select-none z-0">
           <span className="text-[10px] font-mono font-bold text-gray-500 dark:text-gray-500 opacity-40">v{APP_VERSION}</span>
       </div>
-      
-      <button 
+
+      <button
           onClick={() => setIsSettingsOpen(true)}
           className="fixed bottom-6 left-6 w-10 h-10 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-105 active:scale-95 z-40 border border-gray-300 dark:border-gray-700"
           title={t.settings}
@@ -873,14 +982,14 @@ export default function App() {
         <div className="fixed bottom-2 left-6 z-50 flex items-center gap-1.5">
              <div className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'synced' ? 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]' : syncStatus === 'syncing' ? 'bg-indigo-500 animate-pulse' : 'bg-rose-500'}`}></div>
              <span className="text-[9px] text-gray-400 dark:text-gray-600 font-bold tracking-wider">
-                {syncStatus === 'synced' 
-                    ? (syncStats ? `SYNCED (↑${(syncStats.up/1024).toFixed(1)}KB ↓${(syncStats.down/1024).toFixed(1)}KB)` : 'SYNCED') 
+                {syncStatus === 'synced'
+                    ? (syncStats ? `SYNCED (↑${(syncStats.up/1024).toFixed(1)}KB ↓${(syncStats.down/1024).toFixed(1)}KB)` : 'SYNCED')
                     : syncStatus === 'syncing' ? 'SYNCING...' : 'ERROR'}
              </span>
         </div>
       )}
 
-      <button 
+      <button
           onClick={() => setIsModalOpen(true)}
           className="fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-2xl flex items-center justify-center text-3xl font-light transition-transform hover:scale-105 active:scale-95 z-40 border border-indigo-400/30"
           title={t.addTransaction}
@@ -891,24 +1000,40 @@ export default function App() {
       {showDesignDebug && (
           <DesignDebugger config={designConfig} onChange={setDesignConfig} onClose={() => setShowDesignDebug(false)} />
       )}
-      <AddTransactionModal 
+      <AddTransactionModal
         isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingItem(null); }} onSave={handleSaveData} initialData={editingItem} categories={categoryDefs} language={language}
       />
-      <SettingsModal 
+      <SettingsModal
         isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)}
-        syncConfig={syncConfig} onSaveSyncConfig={handleSaveSyncConfig} onClearData={handleClearDataRequest} onExportData={handleExportData} onImportData={handleImportData} onAddMockData={handleAddMockData}
+        syncConfig={syncConfig} syncAuthUserId={syncAuthUserId} syncAuthEmail={syncAuthEmail} syncAuthLoading={syncAuthLoading} onSaveSyncConfig={handleSaveSyncConfig} onClearData={handleClearDataRequest} onExportData={handleExportData} onImportData={handleImportData} onAddMockData={handleAddMockData}
         showDesignDebug={showDesignDebug} onToggleDesignDebug={() => setShowDesignDebug(!showDesignDebug)}
         onOpenCategoryManager={() => setIsCategoryManagerOpen(true)}
         language={language} onLanguageChange={setLanguage}
       />
-      <CategoryManager 
+      <CategoryManager
         isOpen={isCategoryManagerOpen}
         onClose={() => setIsCategoryManagerOpen(false)}
         categories={categoryDefs}
-        onSave={setCategoryDefs}
+        onSave={(nextCategories) => {
+            const previous = stateRef.current.categoryDefs;
+            const nextIds = new Set(nextCategories.map(category => category.id));
+            const removed = previous.filter(category => !nextIds.has(category.id));
+            const names = { ...stateRef.current.deletedCategoryNames };
+            const ids = { ...stateRef.current.deletedCategoryIds };
+            const now = Date.now();
+            removed.forEach(category => { names[category.id] = category.name; ids[category.id] = now; });
+            nextCategories.forEach(category => {
+                Object.entries(names).forEach(([id, name]) => {
+                    if (name.toLowerCase() === category.name.toLowerCase()) { delete names[id]; delete ids[id]; }
+                });
+            });
+            setDeletedCategoryNames(names);
+            setDeletedCategoryIds(ids);
+            setCategoryDefs(nextCategories);
+        }}
         language={language}
       />
-      <DateRangeModal 
+      <DateRangeModal
         isOpen={isDateFilterOpen}
         startDate={filterStartDate}
         endDate={filterEndDate}
@@ -919,18 +1044,21 @@ export default function App() {
         }}
         language={language}
       />
-      
-      <ConfirmModal 
+
+      <ConfirmModal
         isOpen={!!shiftCycleDialog} title={t.confirmTitle} message={`This payment (${shiftCycleDialog?.newDate.toLocaleDateString()}) falls in the next billing cycle. Shift cycle start to ${shiftCycleDialog?.newDate.getDate()}th?`}
         onConfirm={handleConfirmShiftCycle} confirmText="Yes, Shift Cycle" onAlternative={handleAlternativeKeepCycle} alternativeText="No, Keep Current" onCancel={() => setShiftCycleDialog(null)} cancelText={t.cancel}
       />
       <ConfirmModal
         isOpen={isClearDataConfirmOpen}
         title={t.clearData}
-        message="Are you sure? This will delete all local transactions and plans. This cannot be undone."
+        message={clearDataError || (syncConfig.enabled
+          ? 'This will clear transactions, plans, categories, and billing metadata from this sync account and this device. Cloud deletion must finish before local data is cleared.'
+          : 'This will delete all local transactions, plans, categories, and reset billing metadata. This cannot be undone.')}
         onConfirm={performClearData}
-        onCancel={() => setIsClearDataConfirmOpen(false)}
-        confirmText={t.yes}
+        onCancel={() => { setIsClearDataConfirmOpen(false); clearDataSyncBlockedRef.current = false; setClearDataError(''); }}
+        confirmText={isClearingData ? 'Clearing…' : t.yes}
+        confirmDisabled={isClearingData}
         cancelText={t.cancel}
       />
       {transitionState && (

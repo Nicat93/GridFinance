@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { SyncConfig, LanguageCode } from '../types';
 import { translations } from '../translations';
 import { logger, LogEntry } from '../services/logger';
+import * as SupabaseService from '../services/supabaseService';
 
 interface Props {
   isOpen: boolean;
@@ -10,6 +11,9 @@ interface Props {
   isDarkMode: boolean;
   onToggleTheme: () => void;
   syncConfig: SyncConfig;
+  syncAuthUserId: string | null;
+  syncAuthEmail: string | null;
+  syncAuthLoading: boolean;
   onSaveSyncConfig: (cfg: SyncConfig) => void;
   onClearData: () => void;
   onExportData: () => void;
@@ -23,7 +27,7 @@ interface Props {
 }
 
 const SettingsModal: React.FC<Props> = ({ 
-    isOpen, onClose, isDarkMode, onToggleTheme, syncConfig, onSaveSyncConfig, onClearData,
+    isOpen, onClose, isDarkMode, onToggleTheme, syncConfig, syncAuthUserId, syncAuthEmail, syncAuthLoading, onSaveSyncConfig, onClearData,
     onExportData, onImportData, onAddMockData, showDesignDebug, onToggleDesignDebug, onOpenCategoryManager,
     language, onLanguageChange
 }) => {
@@ -31,6 +35,11 @@ const SettingsModal: React.FC<Props> = ({
   const [enabled, setEnabled] = useState(syncConfig.enabled);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authMessage, setAuthMessage] = useState('');
+  const [authError, setAuthError] = useState(false);
+  const [authBusy, setAuthBusy] = useState(false);
   
   const t = translations[language];
 
@@ -69,7 +78,38 @@ const SettingsModal: React.FC<Props> = ({
   };
 
   const isConfigured = !!(syncConfig.supabaseUrl && syncConfig.supabaseKey);
-  const canSave = isConfigured && (!enabled || syncId.trim().length > 0);
+  const canSave = isConfigured && (!enabled || (syncId.trim().length > 0 && !!syncAuthUserId));
+
+  const handleAuth = async (action: 'signIn' | 'signUp') => {
+      setAuthBusy(true);
+      setAuthMessage('');
+      setAuthError(false);
+      try {
+          SupabaseService.initSupabase(syncConfig.supabaseUrl, syncConfig.supabaseKey);
+          await SupabaseService[action](authEmail.trim(), authPassword);
+          setAuthPassword('');
+          setAuthMessage(action === 'signUp' ? 'Account created. Check your email if confirmation is required.' : 'Signed in.');
+      } catch (error: any) {
+          setAuthMessage(error?.message || 'Authentication failed.');
+          setAuthError(true);
+      } finally {
+          setAuthBusy(false);
+      }
+  };
+
+  const handleGoogleAuth = async () => {
+      setAuthBusy(true);
+      setAuthError(false);
+      setAuthMessage('Redirecting to Google…');
+      try {
+          SupabaseService.initSupabase(syncConfig.supabaseUrl, syncConfig.supabaseKey);
+          await SupabaseService.signInWithGoogle();
+      } catch (error: any) {
+          setAuthMessage(error?.message || 'Google sign-in failed.');
+          setAuthError(true);
+          setAuthBusy(false);
+      }
+  };
 
   if (!isOpen) return null;
 
@@ -158,6 +198,22 @@ const SettingsModal: React.FC<Props> = ({
 
             {/* Cloud Sync */}
             <div className="space-y-3">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Cloud account</h3>
+                {syncAuthLoading ? <p className="text-xs text-gray-500" role="status">Checking saved session…</p> : syncAuthUserId ? (
+                    <div className="flex items-center justify-between gap-2 text-xs text-gray-600 dark:text-gray-300">
+                        <span className="truncate" title={syncAuthEmail || syncAuthUserId}>Signed in as {syncAuthEmail || syncAuthUserId}</span>
+                        <button disabled={authBusy} onClick={async () => { setAuthBusy(true); setAuthMessage(''); setAuthError(false); try { await SupabaseService.signOut(); setAuthMessage('Signed out.'); } catch (error: any) { setAuthMessage(error?.message || 'Sign out failed.'); setAuthError(true); } finally { setAuthBusy(false); } }} className="shrink-0 text-indigo-600 dark:text-indigo-400 disabled:opacity-50">Sign out</button>
+                    </div>
+                ) : <>
+                    <input type="email" autoComplete="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="Email" className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded p-2 text-xs text-gray-800 dark:text-gray-200" />
+                    <input type="password" autoComplete="current-password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="Password" className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded p-2 text-xs text-gray-800 dark:text-gray-200" />
+                    <div className="grid grid-cols-2 gap-2">
+                        <button disabled={!isConfigured || authBusy || !authEmail.trim() || !authPassword} onClick={() => handleAuth('signIn')} className="border border-gray-300 dark:border-gray-700 rounded py-2 text-xs disabled:opacity-50">Sign in</button>
+                        <button disabled={!isConfigured || authBusy || !authEmail.trim() || !authPassword} onClick={() => handleAuth('signUp')} className="border border-gray-300 dark:border-gray-700 rounded py-2 text-xs disabled:opacity-50">Create account</button>
+                    </div>
+                    <button disabled={!isConfigured || authBusy} onClick={handleGoogleAuth} className="w-full border border-gray-300 dark:border-gray-700 rounded py-2 text-xs disabled:opacity-50">Continue with Google</button>
+                </>}
+                {authMessage && <p role={authError ? 'alert' : 'status'} className={`text-[10px] ${authError ? 'text-red-600 dark:text-red-400' : 'text-gray-500'}`}>{authMessage}</p>}
                 <div className="flex justify-between items-end">
                     <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">{t.cloudSync}</h3>
                     <div className="flex items-center gap-2">
@@ -174,7 +230,7 @@ const SettingsModal: React.FC<Props> = ({
                 
                 <div className={`space-y-3 transition-opacity ${enabled ? 'opacity-100' : 'opacity-50'}`}>
                     <div className={enabled ? '' : 'pointer-events-none'}>
-                        <label className="block text-[10px] text-gray-500 mb-1">{t.secretKey} {enabled && '*'}</label>
+                            <label className="block text-[10px] text-gray-500 mb-1">Sync group ID (partition name, not a password) {enabled && '*'}</label>
                         <input 
                             type="text" 
                             value={syncId}
