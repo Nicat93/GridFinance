@@ -28,9 +28,8 @@ Read this before making changes to synchronization, persistence, importing, recu
 - Cycle-day changes stamp and upload independent metadata. Older cloud metadata cannot replace a newer local cycle-day change.
 - Transaction and plan IDs may be equal without their deletion state crossing entity boundaries. Categories have their own tombstone namespace.
 - Repeated sync triggers during a running sync collapse into one follow-up; sync operations do not overlap. A failed run does not itself cause an automatic retry loop.
-- Cloud sync requires a restored Supabase Auth session. The app supports email/password and Google OAuth; all row writes include the current Auth user ID, while backend RLS independently checks `owner_id = auth.uid()` and prevents anonymous access. Same-account devices share the Auth account and sync group ID. OAuth returns to the Vite base URL.
-- `supabase/migrations/20260929000000_owner_scoped_rls.sql` clears only the four GridFinance cloud tables and installs mandatory `owner_id`, owner-scoped upsert keys, and owner-only RLS. `sync_id` is only a per-account partition; no old cloud row claiming or NULL-owner compatibility exists. `supabase_schema.sql` mirrors the production migration.
-- Before deployment, the production project still needs the Supabase Email/Google providers and URL allow-list configured, plus a Google Web OAuth client and SMTP for production confirmation email. Exact values and rollout order are in `docs/supabase-owner-isolation.md`.
+- Cloud sync requires Supabase email/password authentication. All row writes include the current Auth user ID, while backend RLS independently checks `owner_id = auth.uid()` and prevents anonymous access. Same-user devices share the Auth account and sync group ID.
+- The owner-isolation migration retains pre-auth rows with NULL `owner_id`, which RLS hides. An administrator must assign legacy partitions to verified Auth accounts after identity verification; `sync_id` alone is never sufficient proof.
 
 ## Important invariants
 
@@ -59,7 +58,7 @@ Read this before making changes to synchronization, persistence, importing, recu
 - Last-write-wins ordering depends on client clocks; skewed clocks can produce incorrect ordering.
 - Cloud Clear Data spans multiple requests and is not transactionally atomic. A failed operation may already have tombstoned some tables, and another device can theoretically write during clearing.
 - Historical `deletedIds` values do not identify whether a transaction or plan was deleted. They are not automatically migrated into typed tombstone maps, since guessing could delete a live row. Existing per-table cloud tombstones still merge by entity.
-- An un-timestamped local/imported record whose ID already exists remotely is skipped for upload. The cloud wins; local reconciliation depends on a normal pull returning that remote row.
+- An un-timestamped legacy record whose ID already exists remotely is skipped for upload. The cloud wins; local reconciliation depends on a normal pull returning that remote row.
 - Sync stores deltas under one per-device watermark and queries by timestamp. Beyond the five-minute pull buffer, clock skew or a delayed write with an old timestamp can be missed. This is an architectural limitation; verify behavior before changing watermarks.
 - Category harvesting is name-based because transactions/plans store tag names rather than category IDs. Deletion suppression is also by name; same-name category definitions represent the same harvested label.
 - Clear Data cannot prevent a concurrent remote writer from recreating data after its table has been enumerated or tombstoned.

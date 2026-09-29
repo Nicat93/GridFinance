@@ -12,8 +12,6 @@ interface Props {
   onToggleTheme: () => void;
   syncConfig: SyncConfig;
   syncAuthUserId: string | null;
-  syncAuthEmail: string | null;
-  syncAuthLoading: boolean;
   onSaveSyncConfig: (cfg: SyncConfig) => void;
   onClearData: () => void;
   onExportData: () => void;
@@ -27,7 +25,7 @@ interface Props {
 }
 
 const SettingsModal: React.FC<Props> = ({ 
-    isOpen, onClose, isDarkMode, onToggleTheme, syncConfig, syncAuthUserId, syncAuthEmail, syncAuthLoading, onSaveSyncConfig, onClearData,
+    isOpen, onClose, isDarkMode, onToggleTheme, syncConfig, syncAuthUserId, onSaveSyncConfig, onClearData,
     onExportData, onImportData, onAddMockData, showDesignDebug, onToggleDesignDebug, onOpenCategoryManager,
     language, onLanguageChange
 }) => {
@@ -38,7 +36,6 @@ const SettingsModal: React.FC<Props> = ({
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authMessage, setAuthMessage] = useState('');
-  const [authError, setAuthError] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   
   const t = translations[language];
@@ -83,7 +80,6 @@ const SettingsModal: React.FC<Props> = ({
   const handleAuth = async (action: 'signIn' | 'signUp') => {
       setAuthBusy(true);
       setAuthMessage('');
-      setAuthError(false);
       try {
           SupabaseService.initSupabase(syncConfig.supabaseUrl, syncConfig.supabaseKey);
           await SupabaseService[action](authEmail.trim(), authPassword);
@@ -91,22 +87,7 @@ const SettingsModal: React.FC<Props> = ({
           setAuthMessage(action === 'signUp' ? 'Account created. Check your email if confirmation is required.' : 'Signed in.');
       } catch (error: any) {
           setAuthMessage(error?.message || 'Authentication failed.');
-          setAuthError(true);
       } finally {
-          setAuthBusy(false);
-      }
-  };
-
-  const handleGoogleAuth = async () => {
-      setAuthBusy(true);
-      setAuthError(false);
-      setAuthMessage('Redirecting to Google…');
-      try {
-          SupabaseService.initSupabase(syncConfig.supabaseUrl, syncConfig.supabaseKey);
-          await SupabaseService.signInWithGoogle();
-      } catch (error: any) {
-          setAuthMessage(error?.message || 'Google sign-in failed.');
-          setAuthError(true);
           setAuthBusy(false);
       }
   };
@@ -199,10 +180,10 @@ const SettingsModal: React.FC<Props> = ({
             {/* Cloud Sync */}
             <div className="space-y-3">
                 <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Cloud account</h3>
-                {syncAuthLoading ? <p className="text-xs text-gray-500" role="status">Checking saved session…</p> : syncAuthUserId ? (
+                {syncAuthUserId ? (
                     <div className="flex items-center justify-between gap-2 text-xs text-gray-600 dark:text-gray-300">
-                        <span className="truncate" title={syncAuthEmail || syncAuthUserId}>Signed in as {syncAuthEmail || syncAuthUserId}</span>
-                        <button disabled={authBusy} onClick={async () => { setAuthBusy(true); setAuthMessage(''); setAuthError(false); try { await SupabaseService.signOut(); setAuthMessage('Signed out.'); } catch (error: any) { setAuthMessage(error?.message || 'Sign out failed.'); setAuthError(true); } finally { setAuthBusy(false); } }} className="shrink-0 text-indigo-600 dark:text-indigo-400 disabled:opacity-50">Sign out</button>
+                        <span>Signed in · {syncAuthUserId.slice(0, 8)}</span>
+                        <button onClick={async () => { await SupabaseService.signOut(); setAuthMessage('Signed out.'); }} className="text-indigo-600 dark:text-indigo-400">Sign out</button>
                     </div>
                 ) : <>
                     <input type="email" autoComplete="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="Email" className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded p-2 text-xs text-gray-800 dark:text-gray-200" />
@@ -211,9 +192,8 @@ const SettingsModal: React.FC<Props> = ({
                         <button disabled={!isConfigured || authBusy || !authEmail.trim() || !authPassword} onClick={() => handleAuth('signIn')} className="border border-gray-300 dark:border-gray-700 rounded py-2 text-xs disabled:opacity-50">Sign in</button>
                         <button disabled={!isConfigured || authBusy || !authEmail.trim() || !authPassword} onClick={() => handleAuth('signUp')} className="border border-gray-300 dark:border-gray-700 rounded py-2 text-xs disabled:opacity-50">Create account</button>
                     </div>
-                    <button disabled={!isConfigured || authBusy} onClick={handleGoogleAuth} className="w-full border border-gray-300 dark:border-gray-700 rounded py-2 text-xs disabled:opacity-50">Continue with Google</button>
                 </>}
-                {authMessage && <p role={authError ? 'alert' : 'status'} className={`text-[10px] ${authError ? 'text-red-600 dark:text-red-400' : 'text-gray-500'}`}>{authMessage}</p>}
+                {authMessage && <p role="status" className="text-[10px] text-gray-500">{authMessage}</p>}
                 <div className="flex justify-between items-end">
                     <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">{t.cloudSync}</h3>
                     <div className="flex items-center gap-2">

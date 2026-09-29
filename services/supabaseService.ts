@@ -11,27 +11,20 @@ import { createClient } from '@supabase/supabase-js';
 import { BackupData, SyncConfig, Transaction, RecurringPlan, CategoryDef } from '../types';
 
 let supabase: any = null;
-let supabaseConfig: { url: string; key: string } | null = null;
 
 export interface SyncAuthUser { id: string; email?: string }
 
-const authUser = (user: any): SyncAuthUser | null => user ? { id: user.id, email: user.email } : null;
-
 export const getAuthUser = async (): Promise<SyncAuthUser | null> => {
     if (!supabase) return null;
-    try {
-        const { data, error } = await supabase.auth.getUser();
-        if (error) return null;
-        return authUser(data.user);
-    } catch {
-        return null;
-    }
+    const { data, error } = await supabase.auth.getUser();
+    if (error) return null;
+    return data.user ? { id: data.user.id, email: data.user.email } : null;
 };
 
 export const subscribeAuth = (callback: (user: SyncAuthUser | null) => void) => {
     if (!supabase) return () => {};
     const { data } = supabase.auth.onAuthStateChange((_event: string, session: any) => {
-        callback(authUser(session?.user));
+        callback(session?.user ? { id: session.user.id, email: session.user.email } : null);
     });
     return () => data.subscription.unsubscribe();
 };
@@ -45,16 +38,6 @@ export const signIn = async (email: string, password: string) => {
 export const signUp = async (email: string, password: string) => {
     if (!supabase) throw new Error('Supabase is not initialized');
     const { error } = await supabase.auth.signUp({ email, password });
-    if (error) throw error;
-};
-
-export const signInWithGoogle = async () => {
-    if (!supabase) throw new Error('Supabase is not initialized');
-    const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
-    const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo },
-    });
     if (error) throw error;
 };
 
@@ -86,20 +69,9 @@ interface DBRow {
 export const initSupabase = (url: string, key: string, options: any = {}) => {
     if (!url || !key) {
         supabase = null;
-        supabaseConfig = null;
         return;
     }
-    if (supabase && supabaseConfig?.url === url && supabaseConfig.key === key) return;
-    supabase = createClient(url, key, {
-        ...options,
-        auth: {
-            persistSession: true,
-            autoRefreshToken: true,
-            detectSessionInUrl: true,
-            ...options.auth,
-        },
-    });
-    supabaseConfig = { url, key };
+    supabase = createClient(url, key, options);
 };
 
 // Helper: Get estimated size of payload in bytes
