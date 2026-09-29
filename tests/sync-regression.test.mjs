@@ -74,7 +74,24 @@ test('an unauthenticated client cannot push even when it supplies a sync partiti
     service.initSupabase(config.supabaseUrl, config.supabaseKey);
     const result = await service.pushChanges(config, [{ id: 'private', lastModified: 10 }], [], [], {}, 1, 0);
     assert.equal(result.success, false);
+    const pull = await service.pullChanges(config, 0);
+    assert.equal(pull.success, false);
     assert.equal(writeCount, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    service.initSupabase('', '');
+  }
+});
+
+test('a restored Supabase session identifies the signed-in account', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async input => authenticatedResponse(input) || new Response('{}', { status: 200 });
+    initTestSupabase();
+    assert.deepEqual(await service.getAuthUser(), {
+      id: '00000000-0000-4000-8000-000000000001',
+      email: 'synthetic@example.test',
+    });
   } finally {
     globalThis.fetch = originalFetch;
     service.initSupabase('', '');
