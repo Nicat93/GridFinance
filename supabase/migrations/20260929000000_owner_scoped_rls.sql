@@ -1,6 +1,5 @@
--- GridFinance owner isolation. Existing partition data is kept with a NULL
--- owner_id and remains inaccessible until an administrator safely claims it.
--- Never assign ownership based only on sync_id: it is user supplied, not proof.
+-- GridFinance sync-id partitioning. This intentionally permits anonymous access
+-- to the partition named in x-gridfinance-sync-id; that value is not authentication.
 
 create table if not exists public.grid_transactions (
     sync_id text not null,
@@ -34,8 +33,7 @@ alter table public.grid_plans add column if not exists owner_id uuid;
 alter table public.grid_categories add column if not exists owner_id uuid;
 alter table public.grid_metadata add column if not exists owner_id uuid;
 
--- Replace legacy global uniqueness with owner-scoped upsert keys. This lets two
--- different authenticated users choose the same sync_id without collisions.
+-- Keep the original sync_id upsert semantics for existing users and devices.
 do $$
 declare tbl text; con record;
 begin
@@ -52,10 +50,14 @@ begin
     end loop;
   end loop;
 end $$;
-create unique index if not exists grid_transactions_owner_sync_id_uidx on public.grid_transactions(owner_id, sync_id, id);
-create unique index if not exists grid_plans_owner_sync_id_uidx on public.grid_plans(owner_id, sync_id, id);
-create unique index if not exists grid_categories_owner_sync_id_uidx on public.grid_categories(owner_id, sync_id, id);
-create unique index if not exists grid_metadata_owner_sync_id_uidx on public.grid_metadata(owner_id, sync_id);
+drop index if exists public.grid_transactions_owner_sync_id_uidx;
+drop index if exists public.grid_plans_owner_sync_id_uidx;
+drop index if exists public.grid_categories_owner_sync_id_uidx;
+drop index if exists public.grid_metadata_owner_sync_id_uidx;
+create unique index if not exists grid_transactions_sync_id_id_uidx on public.grid_transactions(sync_id, id);
+create unique index if not exists grid_plans_sync_id_id_uidx on public.grid_plans(sync_id, id);
+create unique index if not exists grid_categories_sync_id_id_uidx on public.grid_categories(sync_id, id);
+create unique index if not exists grid_metadata_sync_id_uidx on public.grid_metadata(sync_id);
 
 alter table public.grid_transactions enable row level security;
 alter table public.grid_plans enable row level security;
@@ -66,28 +68,48 @@ alter table public.grid_plans force row level security;
 alter table public.grid_categories force row level security;
 alter table public.grid_metadata force row level security;
 
+-- Remove pre-existing table policies so no permissive policy can OR-bypass the
+-- partition check below.
+do $$
+declare tbl text; pol record;
+begin
+  foreach tbl in array array['grid_transactions','grid_plans','grid_categories','grid_metadata'] loop
+    for pol in select policyname from pg_policies where schemaname = 'public' and tablename = tbl loop
+      execute format('drop policy %I on public.%I', pol.policyname, tbl);
+    end loop;
+  end loop;
+end $$;
+
 drop policy if exists grid_transactions_owner_access on public.grid_transactions;
-create policy grid_transactions_owner_access on public.grid_transactions
-    for all to authenticated using (owner_id = (select auth.uid()))
-    with check (owner_id = (select auth.uid()));
+drop policy if exists grid_transactions_sync_id_access on public.grid_transactions;
+create policy grid_transactions_sync_id_access on public.grid_transactions
+    for all to anon, authenticated
+    using (sync_id = nullif(current_setting('request.headers', true)::json ->> 'x-gridfinance-sync-id', ''))
+    with check (sync_id = nullif(current_setting('request.headers', true)::json ->> 'x-gridfinance-sync-id', ''));
 drop policy if exists grid_plans_owner_access on public.grid_plans;
-create policy grid_plans_owner_access on public.grid_plans
-    for all to authenticated using (owner_id = (select auth.uid()))
-    with check (owner_id = (select auth.uid()));
+drop policy if exists grid_plans_sync_id_access on public.grid_plans;
+create policy grid_plans_sync_id_access on public.grid_plans
+    for all to anon, authenticated
+    using (sync_id = nullif(current_setting('request.headers', true)::json ->> 'x-gridfinance-sync-id', ''))
+    with check (sync_id = nullif(current_setting('request.headers', true)::json ->> 'x-gridfinance-sync-id', ''));
 drop policy if exists grid_categories_owner_access on public.grid_categories;
-create policy grid_categories_owner_access on public.grid_categories
-    for all to authenticated using (owner_id = (select auth.uid()))
-    with check (owner_id = (select auth.uid()));
+drop policy if exists grid_categories_sync_id_access on public.grid_categories;
+create policy grid_categories_sync_id_access on public.grid_categories
+    for all to anon, authenticated
+    using (sync_id = nullif(current_setting('request.headers', true)::json ->> 'x-gridfinance-sync-id', ''))
+    with check (sync_id = nullif(current_setting('request.headers', true)::json ->> 'x-gridfinance-sync-id', ''));
 drop policy if exists grid_metadata_owner_access on public.grid_metadata;
-create policy grid_metadata_owner_access on public.grid_metadata
-    for all to authenticated using (owner_id = (select auth.uid()))
-    with check (owner_id = (select auth.uid()));
+drop policy if exists grid_metadata_sync_id_access on public.grid_metadata;
+create policy grid_metadata_sync_id_access on public.grid_metadata
+    for all to anon, authenticated
+    using (sync_id = nullif(current_setting('request.headers', true)::json ->> 'x-gridfinance-sync-id', ''))
+    with check (sync_id = nullif(current_setting('request.headers', true)::json ->> 'x-gridfinance-sync-id', ''));
 
 revoke all on public.grid_transactions, public.grid_plans, public.grid_categories, public.grid_metadata from public, anon;
-grant usage on schema public to authenticated;
-grant select, insert, update, delete on public.grid_transactions, public.grid_plans, public.grid_categories, public.grid_metadata to authenticated;
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on public.grid_transactions, public.grid_plans, public.grid_categories, public.grid_metadata to anon, authenticated;
 
-comment on column public.grid_transactions.owner_id is 'Supabase Auth user that owns this row; NULL legacy rows are inaccessible under RLS until safely assigned.';
-comment on column public.grid_plans.owner_id is 'Supabase Auth user that owns this row; NULL legacy rows are inaccessible under RLS until safely assigned.';
-comment on column public.grid_categories.owner_id is 'Supabase Auth user that owns this row; NULL legacy rows are inaccessible under RLS until safely assigned.';
-comment on column public.grid_metadata.owner_id is 'Supabase Auth user that owns this row; NULL legacy rows are inaccessible under RLS until safely assigned.';
+comment on column public.grid_transactions.owner_id is 'Unused compatibility column retained from a prior owner-scoped migration.';
+comment on column public.grid_plans.owner_id is 'Unused compatibility column retained from a prior owner-scoped migration.';
+comment on column public.grid_categories.owner_id is 'Unused compatibility column retained from a prior owner-scoped migration.';
+comment on column public.grid_metadata.owner_id is 'Unused compatibility column retained from a prior owner-scoped migration.';

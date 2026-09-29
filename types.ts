@@ -109,7 +109,7 @@ export interface SyncConfig {
   enabled: boolean;
   supabaseUrl: string;
   supabaseKey: string;
-  /** Unique ID (partition key) for this user's data in the shared table */
+  /** Client-selected partition ID; this is not an authentication credential. */
   syncId: string;
   lastSyncedAt: number;
 }

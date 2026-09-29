@@ -40,20 +40,11 @@ const authenticatedResponse = (input) => {
     : null;
 };
 
-const initTestSupabase = () => {
-  const user = { id: '00000000-0000-4000-8000-000000000001', email: 'synthetic@example.test' };
-  const jwtPart = Buffer.from(JSON.stringify({ sub: user.id, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 })).toString('base64url');
-  const session = { access_token: `e30.${jwtPart}.synthetic-signature`, refresh_token: 'synthetic-refresh', expires_at: Math.floor(Date.now() / 1000) + 3600, expires_in: 3600, token_type: 'bearer', user };
-  service.initSupabase(config.supabaseUrl, config.supabaseKey, {
-    auth: { storage: { getItem: () => JSON.stringify(session), setItem: () => {}, removeItem: () => {} }, autoRefreshToken: false, persistSession: true, detectSessionInUrl: false },
-  });
-};
-
 test('pull failures are distinguishable from an empty successful pull', async () => {
   const originalFetch = globalThis.fetch;
   try {
     globalThis.fetch = async () => { throw new TypeError('network unavailable'); };
-    initTestSupabase();
+    service.initSupabase(config.supabaseUrl, config.supabaseKey, config.syncId);
     const result = await service.pullChanges(config, 0);
     assert.equal(result.success, false);
     assert.ok(result.error);
@@ -63,18 +54,24 @@ test('pull failures are distinguishable from an empty successful pull', async ()
   }
 });
 
-test('an unauthenticated client cannot push even when it supplies a sync partition', async () => {
+test('anonymous sync uses the supplied partition header and can upload without an account', async () => {
   const originalFetch = globalThis.fetch;
   let writeCount = 0;
+  let partitionHeader = '';
   try {
-    globalThis.fetch = async (_input, init) => {
-      if (init?.method === 'POST' || init?.method === 'PATCH' || init?.method === 'DELETE') writeCount++;
+    globalThis.fetch = async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      if (request.method === 'POST') {
+        writeCount++;
+        partitionHeader = request.headers.get('x-gridfinance-sync-id') || '';
+      }
       return new Response('[]', { status: 201, headers: { 'content-type': 'application/json' } });
     };
-    service.initSupabase(config.supabaseUrl, config.supabaseKey);
+    service.initSupabase(config.supabaseUrl, config.supabaseKey, config.syncId);
     const result = await service.pushChanges(config, [{ id: 'private', lastModified: 10 }], [], [], {}, 1, 0);
-    assert.equal(result.success, false);
-    assert.equal(writeCount, 0);
+    assert.equal(result.success, true);
+    assert.equal(writeCount, 1);
+    assert.equal(partitionHeader, config.syncId);
   } finally {
     globalThis.fetch = originalFetch;
     service.initSupabase('', '');
@@ -124,7 +121,7 @@ test('a local edit stamped at sync start remains eligible after the watermark ad
       requests.push(JSON.parse(await request.clone().text()));
       return new Response('[]', { status: 201, headers: { 'content-type': 'application/json' } });
     };
-    initTestSupabase();
+    service.initSupabase(config.supabaseUrl, config.supabaseKey, config.syncId);
     const syncStartTime = 500;
     const result = await service.pushChanges(
       config,
@@ -137,7 +134,6 @@ test('a local edit stamped at sync start remains eligible after the watermark ad
     );
     assert.equal(result.success, true);
     assert.ok(requests.flat().some(row => row.id === 'during-sync'));
-    assert.ok(requests.flat().filter(row => row.id === 'during-sync').every(row => row.owner_id === '00000000-0000-4000-8000-000000000001'));
   } finally {
     globalThis.fetch = originalFetch;
     service.initSupabase('', '');
@@ -155,7 +151,7 @@ test('a local edit that beats a tombstone is force-uploaded even below the prior
       requests.push(JSON.parse(await request.clone().text()));
       return new Response('[]', { status: 201, headers: { 'content-type': 'application/json' } });
     };
-    initTestSupabase();
+    service.initSupabase(config.supabaseUrl, config.supabaseKey, config.syncId);
     const result = await service.pushChanges(
       config,
       [{ id: 'edited-record', lastModified: 200 }],
@@ -187,7 +183,7 @@ test('legacy records upload only when their ID is absent remotely', async () => 
       if (request.method === 'GET') return new Response('[{"id":"cloud-wins"}]', { status: 200, headers: { 'content-type': 'application/json' } });
       return new Response('[]', { status: 201, headers: { 'content-type': 'application/json' } });
     };
-    initTestSupabase();
+    service.initSupabase(config.supabaseUrl, config.supabaseKey, config.syncId);
     const result = await service.pushChanges(config, [
       { id: 'cloud-wins', createdAt: 10 },
       { id: 'new-import', createdAt: 10 },
@@ -228,7 +224,7 @@ test('category delete uploads a category-table tombstone; clear-data still tombs
       requests.push({ method: request.method, table: url.pathname.split('/').pop(), body: request.method === 'GET' ? null : JSON.parse(await request.clone().text()) });
       return new Response(request.method === 'GET' ? '[{"id":"one"}]' : '[]', { status: request.method === 'GET' ? 200 : 201, headers: { 'content-type': 'application/json' } });
     };
-    initTestSupabase();
+    service.initSupabase(config.supabaseUrl, config.supabaseKey, config.syncId);
     await service.pushChanges(config, [], [], [], {}, 1, 0, {}, {}, {}, { 'cat-1': 500 }, 0, { 'cat-1': 'Food' });
     const categoryTombstone = requests.flatMap(request => request.body || []).find(row => row.id === 'cat-1');
     assert.equal(categoryTombstone.deleted, true);
@@ -254,7 +250,7 @@ test('cycle metadata uploads independently and a newer local cycle value beats o
       requests.push({ table: url.pathname.split('/').pop(), body: request.method === 'POST' ? JSON.parse(await request.clone().text()) : null });
       return new Response('[]', { status: 201, headers: { 'content-type': 'application/json' } });
     };
-    initTestSupabase();
+    service.initSupabase(config.supabaseUrl, config.supabaseKey, config.syncId);
     await service.pushChanges(config, [], [], [], {}, 15, 10, {}, {}, {}, {}, 20);
     assert.ok(requests.some(request => request.table === 'grid_metadata' && request.body.cycle_start_day === 15 && request.body.updated_at === 20));
     const merged = service.mergeDeltas({ ...currentState(), cycleStartDay: 15, cycleStartDayLastModified: 300 }, {
@@ -301,7 +297,7 @@ test('clearSyncData tombstones only rows in the configured sync partition and re
       }
       return new Response('[]', { status: 201, headers: { 'content-type': 'application/json' } });
     };
-    initTestSupabase();
+    service.initSupabase(config.supabaseUrl, config.supabaseKey, config.syncId);
     const result = await service.clearSyncData(config);
     assert.equal(result.success, true);
     for (const request of requests.filter(item => item.method === 'GET')) {
@@ -332,7 +328,7 @@ test('clearSyncData reports partial cloud failures', async () => {
         ? new Response('{"message":"write failed"}', { status: 500, headers: { 'content-type': 'application/json' } })
         : new Response('[]', { status: 201, headers: { 'content-type': 'application/json' } });
     };
-    initTestSupabase();
+    service.initSupabase(config.supabaseUrl, config.supabaseKey, config.syncId);
     const result = await service.clearSyncData(config);
     assert.equal(result.success, false);
     assert.ok(result.error);
@@ -341,4 +337,3 @@ test('clearSyncData reports partial cloud failures', async () => {
     service.initSupabase('', '');
   }
 });
-

@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { SyncConfig, LanguageCode } from '../types';
 import { translations } from '../translations';
 import { logger, LogEntry } from '../services/logger';
-import * as SupabaseService from '../services/supabaseService';
 
 interface Props {
   isOpen: boolean;
@@ -11,7 +10,6 @@ interface Props {
   isDarkMode: boolean;
   onToggleTheme: () => void;
   syncConfig: SyncConfig;
-  syncAuthUserId: string | null;
   onSaveSyncConfig: (cfg: SyncConfig) => void;
   onClearData: () => void;
   onExportData: () => void;
@@ -25,7 +23,7 @@ interface Props {
 }
 
 const SettingsModal: React.FC<Props> = ({ 
-    isOpen, onClose, isDarkMode, onToggleTheme, syncConfig, syncAuthUserId, onSaveSyncConfig, onClearData,
+    isOpen, onClose, isDarkMode, onToggleTheme, syncConfig, onSaveSyncConfig, onClearData,
     onExportData, onImportData, onAddMockData, showDesignDebug, onToggleDesignDebug, onOpenCategoryManager,
     language, onLanguageChange
 }) => {
@@ -33,10 +31,6 @@ const SettingsModal: React.FC<Props> = ({
   const [enabled, setEnabled] = useState(syncConfig.enabled);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [authEmail, setAuthEmail] = useState('');
-  const [authPassword, setAuthPassword] = useState('');
-  const [authMessage, setAuthMessage] = useState('');
-  const [authBusy, setAuthBusy] = useState(false);
   
   const t = translations[language];
 
@@ -75,22 +69,7 @@ const SettingsModal: React.FC<Props> = ({
   };
 
   const isConfigured = !!(syncConfig.supabaseUrl && syncConfig.supabaseKey);
-  const canSave = isConfigured && (!enabled || (syncId.trim().length > 0 && !!syncAuthUserId));
-
-  const handleAuth = async (action: 'signIn' | 'signUp') => {
-      setAuthBusy(true);
-      setAuthMessage('');
-      try {
-          SupabaseService.initSupabase(syncConfig.supabaseUrl, syncConfig.supabaseKey);
-          await SupabaseService[action](authEmail.trim(), authPassword);
-          setAuthPassword('');
-          setAuthMessage(action === 'signUp' ? 'Account created. Check your email if confirmation is required.' : 'Signed in.');
-      } catch (error: any) {
-          setAuthMessage(error?.message || 'Authentication failed.');
-      } finally {
-          setAuthBusy(false);
-      }
-  };
+  const canSave = isConfigured && (!enabled || syncId.trim().length > 0);
 
   if (!isOpen) return null;
 
@@ -179,21 +158,6 @@ const SettingsModal: React.FC<Props> = ({
 
             {/* Cloud Sync */}
             <div className="space-y-3">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Cloud account</h3>
-                {syncAuthUserId ? (
-                    <div className="flex items-center justify-between gap-2 text-xs text-gray-600 dark:text-gray-300">
-                        <span>Signed in · {syncAuthUserId.slice(0, 8)}</span>
-                        <button onClick={async () => { await SupabaseService.signOut(); setAuthMessage('Signed out.'); }} className="text-indigo-600 dark:text-indigo-400">Sign out</button>
-                    </div>
-                ) : <>
-                    <input type="email" autoComplete="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="Email" className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded p-2 text-xs text-gray-800 dark:text-gray-200" />
-                    <input type="password" autoComplete="current-password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="Password" className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded p-2 text-xs text-gray-800 dark:text-gray-200" />
-                    <div className="grid grid-cols-2 gap-2">
-                        <button disabled={!isConfigured || authBusy || !authEmail.trim() || !authPassword} onClick={() => handleAuth('signIn')} className="border border-gray-300 dark:border-gray-700 rounded py-2 text-xs disabled:opacity-50">Sign in</button>
-                        <button disabled={!isConfigured || authBusy || !authEmail.trim() || !authPassword} onClick={() => handleAuth('signUp')} className="border border-gray-300 dark:border-gray-700 rounded py-2 text-xs disabled:opacity-50">Create account</button>
-                    </div>
-                </>}
-                {authMessage && <p role="status" className="text-[10px] text-gray-500">{authMessage}</p>}
                 <div className="flex justify-between items-end">
                     <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">{t.cloudSync}</h3>
                     <div className="flex items-center gap-2">
@@ -210,7 +174,7 @@ const SettingsModal: React.FC<Props> = ({
                 
                 <div className={`space-y-3 transition-opacity ${enabled ? 'opacity-100' : 'opacity-50'}`}>
                     <div className={enabled ? '' : 'pointer-events-none'}>
-                            <label className="block text-[10px] text-gray-500 mb-1">Sync group ID (partition name, not a password) {enabled && '*'}</label>
+                            <label className="block text-[10px] text-gray-500 mb-1">Sync ID (anyone who knows it can access this partition) {enabled && '*'}</label>
                         <input 
                             type="text" 
                             value={syncId}

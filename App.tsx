@@ -161,7 +161,6 @@ export default function App() {
   const [clearDataError, setClearDataError] = useState('');
 
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('offline');
-  const [syncAuthUserId, setSyncAuthUserId] = useState<string | null>(null);
   const [syncStats, setSyncStats] = useState<{ up: number, down: number } | null>(null);
   const syncTimeoutRef = useRef<number | null>(null);
   const isSyncingRef = useRef(false);
@@ -413,14 +412,8 @@ export default function App() {
 
   useEffect(() => {
       if (syncConfig.supabaseUrl && syncConfig.supabaseKey) {
-          SupabaseService.initSupabase(syncConfig.supabaseUrl, syncConfig.supabaseKey);
-          SupabaseService.getAuthUser().then(user => setSyncAuthUserId(user?.id || null));
-          const unsubscribe = SupabaseService.subscribeAuth(user => {
-              setSyncAuthUserId(user?.id || null);
-              if (user && stateRef.current.syncConfig.enabled) window.setTimeout(() => triggerSync(), 0);
-          });
+          SupabaseService.initSupabase(syncConfig.supabaseUrl, syncConfig.supabaseKey, syncConfig.syncId);
           if (syncConfig.enabled) triggerSync();
-          return unsubscribe;
       } else {
           setSyncStatus('offline');
       }
@@ -524,7 +517,7 @@ export default function App() {
           isClearingDataRef.current = true;
           clearDataSyncBlockedRef.current = true;
           setIsClearingData(true);
-          SupabaseService.initSupabase(currentConfig.supabaseUrl, currentConfig.supabaseKey);
+          SupabaseService.initSupabase(currentConfig.supabaseUrl, currentConfig.supabaseKey, currentConfig.syncId);
           const result = await SupabaseService.clearSyncData(currentConfig);
           isClearingDataRef.current = false;
           setIsClearingData(false);
@@ -993,7 +986,7 @@ export default function App() {
       />
       <SettingsModal
         isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)}
-        syncConfig={syncConfig} syncAuthUserId={syncAuthUserId} onSaveSyncConfig={handleSaveSyncConfig} onClearData={handleClearDataRequest} onExportData={handleExportData} onImportData={handleImportData} onAddMockData={handleAddMockData}
+        syncConfig={syncConfig} onSaveSyncConfig={handleSaveSyncConfig} onClearData={handleClearDataRequest} onExportData={handleExportData} onImportData={handleImportData} onAddMockData={handleAddMockData}
         showDesignDebug={showDesignDebug} onToggleDesignDebug={() => setShowDesignDebug(!showDesignDebug)}
         onOpenCategoryManager={() => setIsCategoryManagerOpen(true)}
         language={language} onLanguageChange={setLanguage}

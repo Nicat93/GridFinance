@@ -12,50 +12,8 @@ import { BackupData, SyncConfig, Transaction, RecurringPlan, CategoryDef } from 
 
 let supabase: any = null;
 
-export interface SyncAuthUser { id: string; email?: string }
-
-export const getAuthUser = async (): Promise<SyncAuthUser | null> => {
-    if (!supabase) return null;
-    const { data, error } = await supabase.auth.getUser();
-    if (error) return null;
-    return data.user ? { id: data.user.id, email: data.user.email } : null;
-};
-
-export const subscribeAuth = (callback: (user: SyncAuthUser | null) => void) => {
-    if (!supabase) return () => {};
-    const { data } = supabase.auth.onAuthStateChange((_event: string, session: any) => {
-        callback(session?.user ? { id: session.user.id, email: session.user.email } : null);
-    });
-    return () => data.subscription.unsubscribe();
-};
-
-export const signIn = async (email: string, password: string) => {
-    if (!supabase) throw new Error('Supabase is not initialized');
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-};
-
-export const signUp = async (email: string, password: string) => {
-    if (!supabase) throw new Error('Supabase is not initialized');
-    const { error } = await supabase.auth.signUp({ email, password });
-    if (error) throw error;
-};
-
-export const signOut = async () => {
-    if (!supabase) return;
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-};
-
-const requireOwnerId = async (): Promise<string> => {
-    const user = await getAuthUser();
-    if (!user) throw new Error('Sign in to synchronize your data');
-    return user.id;
-};
-
 // --- Interfaces for DB Rows ---
 interface DBRow {
-    owner_id: string;
     sync_id: string;
     id: string;
     data: any;
@@ -66,12 +24,15 @@ interface DBRow {
 /**
  * Initialize Supabase Client
  */
-export const initSupabase = (url: string, key: string, options: any = {}) => {
+export const initSupabase = (url: string, key: string, syncId = '') => {
     if (!url || !key) {
         supabase = null;
         return;
     }
-    supabase = createClient(url, key, options);
+    supabase = createClient(url, key, {
+        global: { headers: syncId ? { 'x-gridfinance-sync-id': syncId } : {} },
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
 };
 
 // Helper: Get estimated size of payload in bytes
@@ -141,14 +102,12 @@ export const clearSyncData = async (config: SyncConfig): Promise<{ success: bool
     if (!supabase || !config.syncId) return { success: false, error: new Error('Sync is not configured') };
     const timestamp = Date.now();
     try {
-        const ownerId = await requireOwnerId();
         const [transactionIds, planIds, categoryIds] = await Promise.all([
             fetchPartitionIds('grid_transactions', config.syncId),
             fetchPartitionIds('grid_plans', config.syncId),
             fetchPartitionIds('grid_categories', config.syncId),
         ]);
         const tombstones = (ids: string[]) => ids.map(id => ({
-            owner_id: ownerId,
             sync_id: config.syncId,
             id,
             data: {},
@@ -161,11 +120,10 @@ export const clearSyncData = async (config: SyncConfig): Promise<{ success: bool
         await batchUpsert('grid_categories', tombstones(categoryIds));
 
         const { error } = await supabase.from('grid_metadata').upsert({
-            owner_id: ownerId,
             sync_id: config.syncId,
             cycle_start_day: 1,
             updated_at: timestamp,
-        }, { onConflict: 'owner_id,sync_id' });
+        }, { onConflict: 'sync_id' });
         if (error) throw error;
         return { success: true };
     } catch (error) {
@@ -181,7 +139,7 @@ const batchUpsert = async (table: string, rows: any[]) => {
     const BATCH_SIZE = 200; 
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
         const chunk = rows.slice(i, i + BATCH_SIZE);
-        const { error } = await supabase.from(table).upsert(chunk, { onConflict: 'owner_id,sync_id,id' });
+        const { error } = await supabase.from(table).upsert(chunk, { onConflict: 'sync_id,id' });
         if (error) throw error;
     }
 };
@@ -209,7 +167,6 @@ export const pullChanges = async (config: SyncConfig, lastSyncedAt: number): Pro
     const bufferedTimestamp = Math.max(0, lastSyncedAt - 300000);
 
     try {
-        await requireOwnerId();
         // 1. Fetch changed Transactions (with pagination)
         const txRows = await fetchAll('grid_transactions', config.syncId, bufferedTimestamp);
 
@@ -285,21 +242,12 @@ export const pushChanges = async (
 ): Promise<{ success: boolean, uploadSizeBytes: number }> => {
     if (!supabase || !config.syncId) return { success: false, uploadSizeBytes: 0 };
 
-    let ownerId: string;
-    try {
-        ownerId = await requireOwnerId();
-    } catch (e) {
-        console.error('Sync Push Error:', e);
-        return { success: false, uploadSizeBytes: 0 };
-    }
-
     // Identify Changed Items (Created/Modified AFTER lastSyncedAt)
     
     // 1. Prepare Transactions
     const txUpserts = transactions
         .filter(t => (t.lastModified || 0) > lastSyncedAt || forceUploadIds.transactions?.includes(t.id))
         .map(t => ({
-            owner_id: ownerId,
             sync_id: config.syncId,
             id: t.id,
             data: t,
@@ -311,7 +259,6 @@ export const pushChanges = async (
     Object.entries(transactionDeletedIds).forEach(([id, ts]) => {
         if (ts > lastSyncedAt) {
             txUpserts.push({
-                owner_id: ownerId,
                 sync_id: config.syncId,
                 id: id,
                 data: {} as any, // Empty data for tombstone
@@ -325,7 +272,6 @@ export const pushChanges = async (
     const planUpserts = plans
         .filter(p => (p.lastModified || 0) > lastSyncedAt || forceUploadIds.plans?.includes(p.id))
         .map(p => ({
-            owner_id: ownerId,
             sync_id: config.syncId,
             id: p.id,
             data: p,
@@ -338,7 +284,6 @@ export const pushChanges = async (
     Object.entries(planDeletedIds).forEach(([id, ts]) => {
         if (ts > lastSyncedAt) {
              planDeletes.push({
-                owner_id: ownerId,
                 sync_id: config.syncId,
                 id: id,
                 data: {} as any,
@@ -352,7 +297,6 @@ export const pushChanges = async (
     const catUpserts = categoryDefs
         .filter(c => (c.lastModified || 0) > lastSyncedAt)
         .map(c => ({
-            owner_id: ownerId,
             sync_id: config.syncId,
             id: c.id,
             data: c,
@@ -361,7 +305,7 @@ export const pushChanges = async (
         }));
     const catDeletes = Object.entries(deletedCategoryIds)
         .filter(([, ts]) => ts > lastSyncedAt)
-        .map(([id, ts]) => ({ owner_id: ownerId, sync_id: config.syncId, id, data: deletedCategoryNames[id] ? { name: deletedCategoryNames[id] } : {}, updated_at: ts, deleted: true }));
+        .map(([id, ts]) => ({ sync_id: config.syncId, id, data: deletedCategoryNames[id] ? { name: deletedCategoryNames[id] } : {}, updated_at: ts, deleted: true }));
     
     // Calculate Upload Size
     let uploadSizeBytes = 0;
@@ -382,7 +326,7 @@ export const pushChanges = async (
                 if (error) throw error;
                 const cloudIds = new Set((data || []).map((row: any) => row.id));
                 for (const record of chunk) if (!cloudIds.has(record.id)) upserts.push({
-                    owner_id: ownerId, sync_id: config.syncId, id: record.id, data: record, updated_at: Date.now(), deleted: false,
+                    sync_id: config.syncId, id: record.id, data: record, updated_at: Date.now(), deleted: false,
                 });
             }
         };
@@ -401,14 +345,13 @@ export const pushChanges = async (
         // 4. Upsert Metadata (only if changed)
         if (cycleStartDayLastModified > lastSyncedAt) {
              const metaPayload = {
-                owner_id: ownerId,
                 sync_id: config.syncId,
                 cycle_start_day: cycleStartDay,
                 updated_at: cycleStartDayLastModified
              };
              uploadSizeBytes += getPayloadSize(metaPayload);
              
-             const { error } = await supabase.from('grid_metadata').upsert(metaPayload, { onConflict: 'owner_id,sync_id' });
+             const { error } = await supabase.from('grid_metadata').upsert(metaPayload, { onConflict: 'sync_id' });
              if (error) throw error;
         }
 
