@@ -46,12 +46,29 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
 
   // Calculator State
   const [calcTarget, setCalcTarget] = useState<'amount' | 'approximateUpperAmount' | 'maxOccurrences' | null>(null);
+  const amountCalculatorRef = useRef<HTMLButtonElement>(null);
+  const maxCalculatorRef = useRef<HTMLButtonElement>(null);
+  const maxOccurrencesRef = useRef<HTMLInputElement>(null);
+  const previousCalcTarget = useRef<typeof calcTarget>(null);
 
   // Tag Dropdown State
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
   const tagContainerRef = useRef<HTMLDivElement>(null);
   
   const t = translations[language];
+
+  useEffect(() => {
+    const previousTarget = previousCalcTarget.current;
+    if (previousTarget && !calcTarget) {
+      const returnTarget = previousTarget === 'amount'
+        ? amountCalculatorRef.current
+        : previousTarget === 'approximateUpperAmount'
+          ? maxCalculatorRef.current
+          : maxOccurrencesRef.current;
+      returnTarget?.focus();
+    }
+    previousCalcTarget.current = calcTarget;
+  }, [calcTarget]);
 
   useEffect(() => {
     if (isOpen) {
@@ -268,21 +285,27 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
 
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
             
-            <div className="flex gap-2 h-10">
-                <div 
+            <div className="flex gap-2 h-10 max-[360px]:grid max-[360px]:h-auto max-[360px]:grid-cols-2">
+                <button
+                    type="button"
+                    ref={amountCalculatorRef}
                     onClick={() => setCalcTarget('amount')}
-                    className={`flex-1 min-w-0 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white px-2 sm:px-3 py-2 rounded text-left font-mono text-lg flex items-center cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors ${!amount ? 'text-gray-400' : ''}`}
+                    aria-label={`${t.amount}: ${amount || '0.00'}`}
+                    aria-haspopup="dialog"
+                    className={`flex-1 min-w-0 max-[360px]:w-full ${type === 'income' ? 'max-[360px]:col-span-2' : ''} bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white px-2 sm:px-3 py-2 rounded text-left font-mono text-lg flex items-center cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 ${!amount ? 'text-gray-400' : ''}`}
                 >
                     {amount ? amount : '0.00'}
-                </div>
+                </button>
 
-                {type === 'expense' && <div className={`w-[4.5rem] sm:w-20 shrink-0 flex bg-gray-100 dark:bg-gray-900 border ${amountError ? 'border-rose-500' : 'border-gray-200 dark:border-gray-800'} rounded`}>
+                {type === 'expense' && <div className={`w-[4.5rem] sm:w-20 shrink-0 max-[360px]:w-full max-[360px]:min-w-0 flex bg-gray-100 dark:bg-gray-900 border ${amountError ? 'border-rose-500' : 'border-gray-200 dark:border-gray-800'} rounded`}>
                     <button
                         type="button"
+                        ref={maxCalculatorRef}
                         onClick={() => setCalcTarget('approximateUpperAmount')}
-                        aria-label={`${t.approxMax} ${approximateUpperAmount}`}
+                        aria-label={`${t.approxMax}: ${approximateUpperAmount || 'not set'}`}
+                        aria-haspopup="dialog"
                         title={`${t.amount} ${t.approxMax}`}
-                        className={`min-w-0 flex-1 px-2 py-2 text-left text-sm sm:text-base font-mono text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500 placeholder:text-gray-400 ${!approximateUpperAmount ? 'text-gray-400' : ''}`}
+                        className={`min-w-0 flex-1 px-2 py-2 text-left text-sm sm:text-base font-mono text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500 placeholder:text-gray-400 ${!approximateUpperAmount ? 'text-gray-400' : ''}`}
                     >
                         {approximateUpperAmount || t.approxMax}
                     </button>
@@ -295,7 +318,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                     >×</button>}
                 </div>}
 
-                <div className="flex bg-gray-100 dark:bg-gray-900 rounded p-1 border border-gray-200 dark:border-gray-800 shrink-0">
+                <div className="flex bg-gray-100 dark:bg-gray-900 rounded p-1 border border-gray-200 dark:border-gray-800 shrink-0 max-[360px]:col-span-2 max-[360px]:justify-self-end">
                     <button 
                     type="button"
                     onClick={() => setType('expense')}
@@ -436,6 +459,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                                 <div className="flex-1">
                                     <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">{t.totalPayments} (Optional)</label>
                                     <input 
+                                        ref={maxOccurrencesRef}
                                         type="number" 
                                         value={maxOccurrences}
                                         onChange={e => setMaxOccurrences(e.target.value)}
@@ -497,6 +521,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
             initialValue={calcTarget === 'amount' ? amount : calcTarget === 'approximateUpperAmount' ? approximateUpperAmount : maxOccurrences}
             onClose={() => setCalcTarget(null)} 
             onApply={handleCalculatorApply} 
+            calculatorLabel={t.calculator}
         />
     </>
   );

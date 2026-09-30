@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { evaluateArithmetic } from '../services/safeArithmetic';
 
 interface Props {
@@ -7,16 +7,19 @@ interface Props {
   initialValue: string;
   onClose: () => void;
   onApply: (value: string) => void;
+  calculatorLabel: string;
 }
 
 interface ButtonProps {
     label: React.ReactNode;
     onClick: () => void;
     className?: string;
+    buttonRef?: React.RefObject<HTMLButtonElement>;
 }
 
-const CalculatorButton: React.FC<ButtonProps> = ({ label, onClick, className = '' }) => (
+const CalculatorButton: React.FC<ButtonProps> = ({ label, onClick, className = '', buttonRef }) => (
     <button
+      ref={buttonRef}
       type="button"
       onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClick(); }}
       className={`h-14 sm:h-16 rounded-lg text-xl sm:text-2xl font-mono font-medium transition-transform active:scale-95 flex items-center justify-center select-none ${className}`}
@@ -25,10 +28,11 @@ const CalculatorButton: React.FC<ButtonProps> = ({ label, onClick, className = '
     </button>
 );
 
-const CalculatorSheet: React.FC<Props> = ({ isOpen, initialValue, onClose, onApply }) => {
+const CalculatorSheet: React.FC<Props> = ({ isOpen, initialValue, onClose, onApply, calculatorLabel }) => {
   const [display, setDisplay] = useState('0');
   const [equation, setEquation] = useState('');
   const [isResult, setIsResult] = useState(false);
+  const firstButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -40,6 +44,7 @@ const CalculatorSheet: React.FC<Props> = ({ isOpen, initialValue, onClose, onApp
       }
       setEquation('');
       setIsResult(true); // Treat initial value as a result so next number replaces it
+      firstButtonRef.current?.focus();
     }
   }, [isOpen, initialValue]);
 
@@ -120,6 +125,9 @@ const CalculatorSheet: React.FC<Props> = ({ isOpen, initialValue, onClose, onApp
       <div className="absolute inset-0" onClick={onClose}></div>
       
       <div 
+        role="dialog"
+        aria-modal="true"
+        aria-label={calculatorLabel}
         className="relative z-10 bg-white dark:bg-gray-950 w-full max-w-md rounded-t-2xl shadow-2xl p-4 flex flex-col gap-4 animate-in slide-in-from-bottom duration-300 border-t border-gray-200 dark:border-gray-800"
         onClick={(e) => e.stopPropagation()}
       >
@@ -136,7 +144,7 @@ const CalculatorSheet: React.FC<Props> = ({ isOpen, initialValue, onClose, onApp
 
         {/* Keypad */}
         <div className="grid grid-cols-4 gap-2 sm:gap-3">
-            <CalculatorButton label="C" onClick={handleClear} className="bg-gray-200 dark:bg-gray-800 text-red-600 dark:text-red-400" />
+            <CalculatorButton buttonRef={firstButtonRef} label="C" onClick={handleClear} className="bg-gray-200 dark:bg-gray-800 text-red-600 dark:text-red-400" />
             <CalculatorButton label="÷" onClick={() => handleOperator('/')} className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400" />
             <CalculatorButton label="×" onClick={() => handleOperator('*')} className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400" />
             <CalculatorButton label="⌫" onClick={handleBackspace} className="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300" />

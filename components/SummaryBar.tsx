@@ -2,6 +2,7 @@
 import React, { useRef } from 'react';
 import { FinancialSnapshot, SyncStatus, LanguageCode } from '../types';
 import { translations } from '../translations';
+import { formatExpenseAmount, formatMoney } from '../services/presentation';
 
 interface Props {
   snapshot: FinancialSnapshot;
@@ -14,9 +15,6 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus, langu
   const dateInputRef = useRef<HTMLInputElement>(null);
   const t = translations[language];
 
-  // Modified to remove currency symbol
-  const formatMoney = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const formatCompactMoney = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 2 });
   const hasProjectedRange = snapshot.projectedBalanceMin !== undefined && snapshot.projectedBalanceMax !== undefined && snapshot.projectedBalanceMin !== snapshot.projectedBalanceMax;
   const formatDate = (d: Date) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   
@@ -60,18 +58,18 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus, langu
 
   return (
     <div className="sticky top-0 z-30 bg-white/95 dark:bg-black/95 backdrop-blur border-b border-gray-200 dark:border-gray-800 px-2 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] shadow-lg transition-colors">
-      <div className="max-w-4xl mx-auto flex items-center justify-between relative">
+      <div className="max-w-4xl mx-auto flex items-center justify-between relative max-[380px]:grid max-[380px]:grid-cols-2 max-[380px]:gap-x-2 max-[380px]:gap-y-1">
         
         {/* Current */}
-        <div className="flex flex-col shrink-0 min-w-0 max-w-[35%]">
+        <div className="flex flex-col shrink-0 min-w-0 max-w-[35%] max-[380px]:max-w-none">
             <span className="text-[9px] sm:text-[10px] text-gray-500 dark:text-gray-500 uppercase tracking-widest font-bold truncate">{t.current}</span>
-            <span className={`text-xs xs:text-[13px] sm:text-xl font-mono font-bold leading-none tracking-tighter truncate ${snapshot.currentBalance >= 0 ? 'text-gray-900 dark:text-gray-200' : 'text-rose-600 dark:text-rose-500'}`}>
+            <span className={`max-w-full text-[clamp(9px,3.5vw,20px)] sm:text-xl font-mono font-bold leading-tight tracking-tight break-all ${snapshot.currentBalance >= 0 ? 'text-gray-900 dark:text-gray-200' : 'text-rose-600 dark:text-rose-500'}`}>
                 {formatMoney(snapshot.currentBalance)}
             </span>
         </div>
 
         {/* Separator / Cycle Info */}
-        <div className="flex-1 px-1 sm:px-4 flex flex-col items-center justify-center min-w-0">
+        <div className="flex-1 px-1 sm:px-4 flex flex-col items-center justify-center min-w-0 max-[380px]:col-span-2 max-[380px]:row-start-2 max-[380px]:px-1">
             <div 
                 className="relative group cursor-pointer flex flex-col items-center max-w-full"
                 onClick={handleContainerClick}
@@ -106,12 +104,16 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus, langu
         </div>
 
         {/* Projected */}
-        <div className="flex flex-col items-end shrink-0 min-w-0 max-w-[35%]">
+        <div className="flex flex-col items-end shrink-0 min-w-0 max-w-[35%] max-[380px]:max-w-none">
             <span className="text-[9px] sm:text-[10px] text-indigo-500 dark:text-indigo-400 uppercase tracking-widest font-bold truncate">{t.endPeriod}</span>
-            <span className={`${hasProjectedRange ? 'text-[10px] xs:text-[11px] sm:text-xl' : 'text-xs xs:text-[13px] sm:text-xl'} font-mono font-bold leading-none tracking-tighter truncate ${snapshot.projectedBalance >= 0 ? 'text-indigo-600 dark:text-indigo-300' : 'text-rose-500 dark:text-rose-400'}`}>
-                {hasProjectedRange
-                    ? `${formatCompactMoney(snapshot.projectedBalanceMin!)} – ${formatCompactMoney(snapshot.projectedBalanceMax!)}`
-                    : formatMoney(snapshot.projectedBalance)}
+            <span className={`max-w-full text-[clamp(9px,3.5vw,20px)] sm:text-xl font-mono font-bold leading-tight tracking-tight text-right ${snapshot.projectedBalance >= 0 ? 'text-indigo-600 dark:text-indigo-300' : 'text-rose-500 dark:text-rose-400'}`}>
+                {hasProjectedRange ? (
+                    <span className="flex flex-wrap justify-end gap-x-1">
+                        <span className="whitespace-nowrap">{formatMoney(snapshot.projectedBalanceMin!)}</span>
+                        <span aria-hidden="true">–</span>
+                        <span className="whitespace-nowrap">{formatMoney(snapshot.projectedBalanceMax!)}</span>
+                    </span>
+                ) : <span className="break-all">{formatMoney(snapshot.projectedBalance)}</span>}
             </span>
         </div>
 
@@ -120,7 +122,7 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus, langu
       {/* Mini Stats Line */}
       <div className="max-w-4xl mx-auto flex justify-between mt-1 sm:mt-2 pt-1 sm:pt-2 border-t border-gray-200 dark:border-gray-900 text-[9px] sm:text-xs font-mono text-gray-500 dark:text-gray-600">
          <span>{t.inc}: <span className="text-emerald-600 dark:text-emerald-500">+{formatMoney(snapshot.upcomingIncome)}</span></span>
-         <span>{t.exp}: <span className="text-rose-600 dark:text-rose-500">-{formatMoney(snapshot.upcomingExpenses)}{snapshot.upcomingExpensesMax !== undefined && snapshot.upcomingExpensesMax !== snapshot.upcomingExpenses ? ` – ${formatCompactMoney(snapshot.upcomingExpensesMax)}` : ''}</span></span>
+         <span>{t.exp}: <span className="text-rose-600 dark:text-rose-500">{formatExpenseAmount(snapshot.upcomingExpenses, snapshot.upcomingExpensesMax)}</span></span>
       </div>
     </div>
   );

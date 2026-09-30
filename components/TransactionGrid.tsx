@@ -5,6 +5,8 @@ import { Transaction, SortOption, CategoryDef, LanguageCode } from '../types';
 import { DesignConfig } from './DesignDebugger';
 import { translations } from '../translations';
 import { getPaidVisualState } from '../services/financialState';
+import { formatTransactionAmount, getHistoryEmptyState } from '../services/presentation';
+import { handleExpandableRowKeyboardActivation } from '../services/keyboardAccessibility';
 
 interface Props {
   transactions: Transaction[];
@@ -18,6 +20,7 @@ interface Props {
   endDate?: string;
   language: LanguageCode;
   today?: string;
+  onAddEntry: () => void;
 }
 
 const PAGE_SIZE = 50;
@@ -26,7 +29,7 @@ const KNOWN_COLORS = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime
 const TransactionGrid: React.FC<Props> = ({ 
     transactions, onDelete, onEdit, 
     filterText, sortOption, designConfig, categories,
-    startDate, endDate, language, today
+    startDate, endDate, language, today, onAddEntry
 }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -182,7 +185,12 @@ const TransactionGrid: React.FC<Props> = ({
             {/* --- Body --- */}
             <div className="divide-y divide-gray-100 dark:divide-gray-800 font-mono">
             {filteredAndSorted.length === 0 ? (
-                <div className="p-4 text-center text-gray-400 dark:text-gray-600 italic text-[10px]">{t.noMatches}</div>
+                getHistoryEmptyState(transactions.length, filterText, startDate, endDate) === 'empty' ? (
+                    <div className="p-3 text-center text-gray-400 dark:text-gray-500 text-[10px]">
+                        <p>{t.noTransactionsYet}</p>
+                        <button type="button" onClick={onAddEntry} className="mt-1 text-indigo-600 dark:text-indigo-400 font-bold underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">{t.addFirstTransaction}</button>
+                    </div>
+                ) : <div className="p-4 text-center text-gray-400 dark:text-gray-600 italic text-[10px]">{t.noMatches}</div>
             ) : (
                 <>
                     {visibleTransactions.map((tx) => {
@@ -194,7 +202,12 @@ const TransactionGrid: React.FC<Props> = ({
                             
                             {/* Main Row - Styled via Design Config */}
                             <div 
-                                className={`flex items-center cursor-pointer ${isExpanded ? 'bg-gray-50 dark:bg-gray-900/40 items-start' : ''}`} 
+                                role="button"
+                                tabIndex={0}
+                                aria-expanded={isExpanded}
+                                aria-controls={isExpanded ? `transaction-details-${tx.id}` : undefined}
+                                onKeyDown={(e) => handleExpandableRowKeyboardActivation(e, () => toggleRow(tx.id))}
+                                className={`flex items-center cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 ${isExpanded ? 'bg-gray-50 dark:bg-gray-900/40 items-start' : ''}`}
                                 style={rowStyle}
                                 onClick={() => toggleRow(tx.id)}
                             >
@@ -241,9 +254,7 @@ const TransactionGrid: React.FC<Props> = ({
                                         className={`whitespace-nowrap min-w-[45px] ${tx.type === 'expense' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'}`}
                                         style={amountStyle}
                                     >
-                                        {tx.type === 'expense' && tx.approximateUpperAmount !== undefined && tx.approximateUpperAmount !== tx.amount
-                                            ? `−(${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} – ${tx.approximateUpperAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`
-                                            : `${tx.type === 'expense' ? '-' : '+'}${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                        {formatTransactionAmount(tx.type, tx.amount, tx.approximateUpperAmount)}
                                     </span>
                                 </div>
                             </div>
@@ -251,6 +262,7 @@ const TransactionGrid: React.FC<Props> = ({
                             {/* Expanded Details Panel (Actions Only) */}
                             {isExpanded && (
                                 <div 
+                                    id={`transaction-details-${tx.id}`}
                                     className="bg-gray-50 dark:bg-gray-900/50 px-2 pb-2 text-[11px] text-gray-500 flex flex-col gap-2 cursor-default"
                                     onClick={(e) => e.stopPropagation()}
                                 >

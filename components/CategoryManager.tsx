@@ -135,9 +135,9 @@ const CategoryManager: React.FC<Props> = ({ isOpen, onClose, categories, onSave,
                 return (
                 <div key={cat.id} className="flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-900/30 rounded group border border-transparent hover:border-gray-100 dark:hover:border-gray-800 transition-colors">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className="relative group/color shrink-0">
+                        <div className="category-color-control relative group/color shrink-0 w-3.5 h-3.5">
                             <div 
-                                className={`w-3.5 h-3.5 rounded-full cursor-pointer border border-gray-200 dark:border-gray-700 shadow-sm ${preview.className || ''}`}
+                                className={`category-color-dot absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full cursor-pointer border border-gray-200 dark:border-gray-700 shadow-sm ${preview.className || ''}`}
                                 style={preview.style}
                             ></div>
                             <input 
@@ -155,7 +155,7 @@ const CategoryManager: React.FC<Props> = ({ isOpen, onClose, categories, onSave,
                         </div>
                     </div>
                     
-                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="category-actions flex items-center gap-2 transition-opacity">
                         <input 
                             type="text" 
                             value={cat.color}
@@ -165,7 +165,7 @@ const CategoryManager: React.FC<Props> = ({ isOpen, onClose, categories, onSave,
                         />
                         <button 
                             onClick={() => handleDelete(cat.id)}
-                            className="text-gray-400 hover:text-rose-500 p-1"
+                            className="text-gray-400 hover:text-rose-500 p-1 min-w-7 min-h-7 flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-500"
                         >
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>

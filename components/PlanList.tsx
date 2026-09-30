@@ -4,6 +4,8 @@ import React, { useState, useMemo } from 'react';
 import { RecurringPlan, Frequency, SortOption, CategoryDef, LanguageCode } from '../types';
 import { DesignConfig } from './DesignDebugger';
 import { translations } from '../translations';
+import { formatTransactionAmount } from '../services/presentation';
+import { handleExpandableRowKeyboardActivation } from '../services/keyboardAccessibility';
 import { addDateOnly, dateOnlyToLocalDate, formatDateOnly } from '../services/dateOnly';
 
 interface Props {
@@ -227,7 +229,12 @@ const PlanList: React.FC<Props> = ({
                                 
                                 {/* Main Row */}
                                 <div 
-                                    className={`flex items-center cursor-pointer ${isExpanded ? 'bg-gray-50 dark:bg-gray-900/40 items-start' : ''}`}
+                                    role="button"
+                                    tabIndex={0}
+                                    aria-expanded={isExpanded}
+                                    aria-controls={isExpanded ? `plan-details-${plan.id}` : undefined}
+                                    onKeyDown={(e) => handleExpandableRowKeyboardActivation(e, () => toggleRow(plan.id))}
+                                    className={`flex items-center cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 ${isExpanded ? 'bg-gray-50 dark:bg-gray-900/40 items-start' : ''}`}
                                     style={rowStyle}
                                     onClick={() => toggleRow(plan.id)}
                                 >
@@ -284,7 +291,7 @@ const PlanList: React.FC<Props> = ({
                                             className={`whitespace-nowrap min-w-[45px] ${plan.type === 'income' ? 'text-emerald-500 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
                                             style={amountStyle}
                                         >
-                                            {plan.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{plan.type === 'expense' && plan.approximateUpperAmount !== undefined && plan.approximateUpperAmount !== plan.amount ? ` – ${plan.approximateUpperAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
+                                            {formatTransactionAmount(plan.type, plan.amount, plan.approximateUpperAmount)}
                                         </span>
                                     </div>
                                 </div>
@@ -292,6 +299,7 @@ const PlanList: React.FC<Props> = ({
                                 {/* Expanded Details Panel */}
                                 {isExpanded && (
                                     <div 
+                                        id={`plan-details-${plan.id}`}
                                         className="bg-gray-50 dark:bg-gray-900/50 px-2 pb-2 text-[11px] text-gray-500 flex flex-col gap-2 cursor-default" 
                                         onClick={(e) => e.stopPropagation()}
                                     >

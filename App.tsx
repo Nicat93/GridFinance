@@ -1049,6 +1049,7 @@ export default function App() {
                 transactions={transactions}
                 onDelete={deleteTransaction}
                 onEdit={(t) => { setEditingItem(t); setIsModalOpen(true); }}
+                onAddEntry={() => { setEditingItem(null); setIsModalOpen(true); }}
                 filterText={filterText}
                 sortOption={sortOption}
                 designConfig={designConfig}

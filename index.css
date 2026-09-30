@@ -21,3 +21,14 @@ body {
   @apply bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-200;
   overscroll-behavior-y: none;
 }
+
+@media (hover: hover) and (pointer: fine) {
+  .category-actions { opacity: 0; }
+  .group:hover .category-actions,
+  .group:focus-within .category-actions { opacity: 1; }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .category-actions { opacity: 1; }
+  .category-color-control { width: 1.75rem; height: 1.75rem; }
+}
