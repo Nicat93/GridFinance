@@ -8,7 +8,8 @@ const entityMerge = (local: any[], incoming: any[], tombstones: Record<string, n
     const old = result.get(item.id);
     if (!old || (item.lastModified || 0) > (old.lastModified || 0)) result.set(item.id, item);
   }
-  return [...result.values()].filter(item => (tombstones[item.id] || 0) < (item.lastModified || 0));
+  return [...result.values()].filter(item =>
+    !Object.prototype.hasOwnProperty.call(tombstones, item.id) || tombstones[item.id] < (item.lastModified || 0));
 };
 
 const mergeTimes = (...maps: Array<Record<string, number> | undefined>) => {

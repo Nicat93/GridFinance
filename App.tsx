@@ -486,17 +486,19 @@ export default function App() {
               else setSyncStatus('offline');
           }
       };
+      const handleOnline = () => triggerSync();
+      const handleOffline = () => setSyncStatus('offline');
       document.addEventListener('visibilitychange', handleVisibilityChange);
       window.addEventListener('focus', handleVisibilityChange);
       // Also listen for online/offline events
-      window.addEventListener('online', () => triggerSync());
-      window.addEventListener('offline', () => setSyncStatus('offline'));
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
 
       return () => {
           document.removeEventListener('visibilitychange', handleVisibilityChange);
           window.removeEventListener('focus', handleVisibilityChange);
-          window.removeEventListener('online', () => triggerSync());
-          window.removeEventListener('offline', () => setSyncStatus('offline'));
+          window.removeEventListener('online', handleOnline);
+          window.removeEventListener('offline', handleOffline);
       };
   }, [syncConfig.enabled, triggerSync]);
 

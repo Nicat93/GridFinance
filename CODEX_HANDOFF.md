@@ -4,8 +4,9 @@ Read this before making changes to synchronization, persistence, importing, recu
 
 ## Current architecture
 
+- The production app is deployed to GitHub Pages under `/GridFinance/`, and Vite's production base is `/GridFinance/`. The PWA manifest lives at `public/manifest.json`, is emitted as `dist/manifest.json`, and `index.html` references it using Vite's `%BASE_URL%`. In production, its relative start URL and scope resolve to `/GridFinance/`, and its icon resolves to `/GridFinance/icon.svg`. The service worker remains at `/GridFinance/sw.js` and retains its existing update and offline strategy.
 - `App.tsx` owns transaction, plan, category, billing-cycle, tombstone, sync configuration, and UI state. Durable local snapshots are reconciled by existing modification timestamps and tombstones, and serialized across tabs with the Web Locks API before storage writes. `storage` events merge incoming snapshots into active tabs without writing unchanged data back. Explicit clear, sync-target reset, and backup overwrite operations advance a local reset marker so stale tabs cannot refill the cleared/replaced snapshot.
-- Supabase access and merge behavior live in `services/supabaseService.ts`. Transactions, plans, categories, metadata, and tombstones are partitioned by caller-supplied `sync_id`; the client sends it in `x-gridfinance-sync-id`, and RLS filters to that header value. This is intentionally a weak selector, not authentication: anyone who knows or guesses an ID can read and change that partition. The public anon key is not an identity credential.
+- Supabase access and merge behavior live in `services/supabaseService.ts`. Transactions, plans, categories, metadata, and tombstones are partitioned by caller-supplied `sync_id`; the client sends it in `x-gridfinance-sync-id`, and RLS filters to that header value. This is an accepted weak selector, not authentication: anyone who knows or guesses an ID can read and change that partition. The public anon key is not an identity credential. Do not recommend an Auth change unless requirements change.
 - A sync pulls changed rows, merges against the latest local state, then pushes eligible local changes. Pull uses a five-minute buffer before the shared `lastSyncedAt` watermark. Push uses strict `>` timestamp comparisons, with explicit force-upload IDs for local edits that beat remote deletion tombstones.
 - Transaction, plan, and category modifications use `lastModified` instants. Deletes use per-entity timestamp maps: `transactionDeletedIds`, `planDeletedIds`, and `deletedCategoryIds`. Ordinary category tombstones carry the deleted name to prevent category harvesting from recreating it from tags still in history/plans.
 - Billing-cycle metadata has its own `cycleStartDayLastModified`; it is pulled independently and pushed independently of transaction/plan edits.
@@ -30,7 +31,9 @@ Read this before making changes to synchronization, persistence, importing, recu
 - Current balance includes paid transactions only. A paid future-dated transaction retains its scheduled date, affects Current immediately, and displays a paid-early date pill until its scheduled local calendar day.
 - Recurring period projections binary-search the anchor-based occurrence sequence to begin at the selected period, preserving weekly/monthly/yearly clamping and inclusive end dates without scanning old occurrences.
 - Transaction and plan IDs may be equal without their deletion state crossing entity boundaries. Categories have their own tombstone namespace.
+- Local snapshot merging retains records with no `lastModified` when no matching tombstone exists. When a tombstone exists, the established timestamp ordering applies; legacy timestamps are not invented during persistence.
 - Repeated sync triggers during a running sync collapse into one follow-up; sync operations do not overlap. A failed run does not itself cause an automatic retry loop.
+- Online/offline sync event listeners use stable callback references and remove those same references during effect cleanup, preventing stale or duplicate listeners after remount or sync re-enablement.
 - Cloud sync works anonymously and preserves the existing sync-ID workflow across devices. The sync ID is deliberately accepted as the access selector, not proof of identity; there is no account-based isolation guarantee.
 
 ## Important invariants
@@ -53,20 +56,23 @@ Read this before making changes to synchronization, persistence, importing, recu
 ## Existing regression tests
 
 - `tests/sync-regression.test.mjs` covers pull failure signaling, edit/delete timestamp conflicts, watermark-edge edits, force-upload after tombstones, safe legacy records, category tombstones and Clear Data, independent cycle metadata, entity-separated IDs, and the pending-sync gate.
+- `tests/local-state-regression.test.mjs` covers cross-tab reconciliation, reset markers, tombstones, and legacy transaction/plan/category persistence and reload.
 - `tests/security-01.test.mjs` covers safe arithmetic, rejection of executable-looking IDs and invalid imported values, whole-backup validation, and supported legacy backup migration.
 - `tests/date-only-regression.test.mjs` covers date-only parsing/formatting, recurrence month-end clamping, and billing-cycle boundaries.
 - `tests/recurring-occurrence.test.mjs` covers deterministic occurrence IDs and convergence to one transaction across devices.
+- `tests/pwa-build.test.mjs` checks generated production PWA paths; `tests/sync-listener-cleanup.test.mjs` checks matching online/offline listener registration and cleanup callbacks.
+- Latest verification: the complete regression suite passed (54 tests across all eight test files); `npm run build` passed; `git diff --check` passed.
 
 ## Known limitations and risks
 
 - New local modifications use a logical clock seeded by the current watermark and known local timestamps, so local clock rollback does not strand new operations. Ordering across independent devices still depends on their client clocks.
 - Cross-tab write serialization uses the browser Web Locks API. Browsers without Web Locks use merge-before-write and storage-event reconciliation without an atomic cross-tab lock.
-- Cloud Clear Data spans multiple requests and is not transactionally atomic. A failed operation may already have tombstoned some tables, and another device can theoretically write during clearing.
+- Cloud Clear Data spans multiple requests and is not transactionally atomic. A failed operation may already have tombstoned some tables, and a concurrent cloud writer can recreate data after enumeration/tombstoning. This is an accepted low-probability concurrency limitation.
 - Historical `deletedIds` values do not identify whether a transaction or plan was deleted. They are not automatically migrated into typed tombstone maps, since guessing could delete a live row. Existing per-table cloud tombstones still merge by entity.
 - An un-timestamped legacy record whose ID already exists remotely is skipped for upload. The cloud wins; local reconciliation depends on a normal pull returning that remote row.
 - Sync stores deltas under one per-device watermark and queries by timestamp. Beyond the five-minute pull buffer, clock skew or a delayed write with an old timestamp can be missed. This is an architectural limitation; verify behavior before changing watermarks.
 - Category harvesting is name-based because transactions/plans store tag names rather than category IDs. Deletion suppression is also by name; same-name category definitions represent the same harvested label.
-- Clear Data cannot prevent a concurrent remote writer from recreating data after its table has been enumerated or tombstoned.
+- Tailwind CSS is loaded from a CDN and its service-worker caching is best-effort, so offline styling depends on that resource having been cached.
 
 ## Guidance for future Codex sessions
 
