@@ -15,48 +15,6 @@
     
     <title>GridFinance</title>
     <link rel="manifest" href="%BASE_URL%manifest.json" />
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              gray: {
-                850: '#1f2937',
-                900: '#111827',
-                950: '#030712',
-              }
-            },
-            fontFamily: {
-              mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', "Liberation Mono", "Courier New", 'monospace'],
-            }
-          }
-        }
-      }
-    </script>
-    <style>
-      /* Custom scrollbar for spreadsheet feel */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #111827; 
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #374151; 
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #4b5563; 
-      }
-      body {
-        background-color: #030712;
-        color: #e5e7eb;
-        overscroll-behavior-y: none;
-      }
-    </style>
   <script type="importmap">
 {
   "imports": {

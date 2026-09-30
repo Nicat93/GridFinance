@@ -7,12 +7,13 @@
 
 
 
-const CACHE_NAME = 'grid-finance-v66';
+const CACHE_NAME = 'grid-finance-v67';
 const CORE_ASSETS = [
   './index.html',
   './manifest.json',
   './icon.svg',
-  'https://cdn.tailwindcss.com'
+  './assets/index.css',
+  './assets/index.js'
 ];
 
 // Install Event: Cache assets
@@ -31,14 +32,6 @@ self.addEventListener('install', (event) => {
         }
       }
       
-      // Try to cache the build output JS. 
-      // In development mode, this file might not exist, so we catch the error 
-      // to prevent the Service Worker from failing to install completely.
-      try {
-        await cache.add('./assets/index.js');
-      } catch (e) {
-        // Expected in some dev environments or if build naming is different
-      }
     })
   );
 });

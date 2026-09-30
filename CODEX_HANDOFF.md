@@ -5,6 +5,7 @@ Read this before making changes to synchronization, persistence, importing, recu
 ## Current architecture
 
 - The production app is deployed to GitHub Pages under `/GridFinance/`, and Vite's production base is `/GridFinance/`. The PWA manifest lives at `public/manifest.json`, is emitted as `dist/manifest.json`, and `index.html` references it using Vite's `%BASE_URL%`. In production, its relative start URL and scope resolve to `/GridFinance/`, and its icon resolves to `/GridFinance/icon.svg`. The service worker remains at `/GridFinance/sw.js` and retains its existing update and offline strategy.
+- Tailwind CSS 3 is compiled from the project sources during the Vite build and emitted as `/GridFinance/assets/index.css`. The service worker precaches this stylesheet with the app shell and main JavaScript, so the installed app’s styling does not depend on a Tailwind CDN request.
 - `App.tsx` owns transaction, plan, category, billing-cycle, tombstone, sync configuration, and UI state. Durable local snapshots are reconciled by existing modification timestamps and tombstones, and serialized across tabs with the Web Locks API before storage writes. `storage` events merge incoming snapshots into active tabs without writing unchanged data back. Explicit clear, sync-target reset, and backup overwrite operations advance a local reset marker so stale tabs cannot refill the cleared/replaced snapshot.
 - Supabase access and merge behavior live in `services/supabaseService.ts`. Transactions, plans, categories, metadata, and tombstones are partitioned by caller-supplied `sync_id`; the client sends it in `x-gridfinance-sync-id`, and RLS filters to that header value. This is an accepted weak selector, not authentication: anyone who knows or guesses an ID can read and change that partition. The public anon key is not an identity credential. Do not recommend an Auth change unless requirements change.
 - `services/supabaseService.ts` reuses one Supabase client for the configured URL/key; repeated service initialization updates the sync-ID header on that client. Auth session persistence, token refresh, and URL session detection are disabled because the app uses anonymous `sync_id` partitioning and no Supabase Auth.
@@ -67,7 +68,7 @@ Read this before making changes to synchronization, persistence, importing, recu
 - `tests/date-only-regression.test.mjs` covers date-only parsing/formatting, recurrence month-end clamping, and billing-cycle boundaries.
 - `tests/recurring-occurrence.test.mjs` covers deterministic occurrence IDs and convergence to one transaction across devices.
 - `tests/pwa-build.test.mjs` checks generated production PWA paths; `tests/sync-listener-cleanup.test.mjs` checks matching online/offline listener registration and cleanup callbacks.
-- Latest verification: all 69 tests across the ten regression files passed by running each test file directly with TypeScript `transpileModule` (avoiding test-runner/esbuild child processes); no tests were skipped. `tsc --noEmit` and `git diff --check` passed. `npm run build` was attempted once but Vite could not spawn its esbuild helper (`spawn EPERM`). GitHub Pages at `/GridFinance/` loaded the 44px narrow-control rule; populated desktop visual QA at 1275×932 found no horizontal overflow. The in-app browser has no viewport override, so 304–390px rendering remains unverified. The earlier local Vite attempt was blocked by Codex's browser with `ERR_BLOCKED_BY_CLIENT`; the reported 304px issue and supplied visual evidence were externally confirmed.
+- Latest verification: 67 tests across the nine non-build regression files passed when run directly (TypeScript `transpileModule`); `tsc --noEmit`, `git diff --check`, and in-process Tailwind CSS generation checks passed. `npm run build` was attempted once but Vite could not spawn its esbuild helper (`spawn EPERM`), so the production-output PWA test and deployed/offline verification remain unverified for this change.
 
 ## Known limitations and risks
 
@@ -78,7 +79,6 @@ Read this before making changes to synchronization, persistence, importing, recu
 - An un-timestamped legacy record whose ID already exists remotely is skipped for upload. The cloud wins; local reconciliation depends on a normal pull returning that remote row.
 - Sync stores deltas under one per-device watermark and queries by timestamp. Beyond the five-minute pull buffer, clock skew or a delayed write with an old timestamp can be missed. This is an architectural limitation; verify behavior before changing watermarks.
 - Category harvesting is name-based because transactions/plans store tag names rather than category IDs. Deletion suppression is also by name; same-name category definitions represent the same harvested label.
-- Tailwind CSS is loaded from a CDN and its service-worker caching is best-effort, so offline styling depends on that resource having been cached.
 
 ## Guidance for future Codex sessions
 

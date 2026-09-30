@@ -3,7 +3,10 @@ export default {
   darkMode: 'class',
   content: [
     "./index.html",
-    "./**/*.{js,ts,jsx,tsx}",
+    "./*.{js,ts,jsx,tsx}",
+    "./App.tsx",
+    "./components/**/*.{js,ts,jsx,tsx}",
+    "./services/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {
@@ -16,7 +19,10 @@ export default {
       },
       fontFamily: {
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', "Liberation Mono", "Courier New", 'monospace'],
-      }
+      },
+      minHeight: {
+        11: '2.75rem',
+      },
     },
   },
   plugins: [],
