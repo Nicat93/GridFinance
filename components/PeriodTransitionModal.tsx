@@ -74,7 +74,7 @@ const PeriodTransitionModal: React.FC<Props> = ({
                                 </div>
                             </div>
                             <div className={`font-mono font-bold text-sm ${plan.type === 'expense' ? 'text-rose-600 dark:text-rose-500' : 'text-emerald-600 dark:text-emerald-500'}`}>
-                                {plan.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {plan.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{plan.type === 'expense' && plan.approximateUpperAmount !== undefined && plan.approximateUpperAmount !== plan.amount ? ` – ${plan.approximateUpperAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
                             </div>
                         </div>
                         

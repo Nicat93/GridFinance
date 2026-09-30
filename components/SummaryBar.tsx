@@ -16,6 +16,8 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus, langu
 
   // Modified to remove currency symbol
   const formatMoney = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatCompactMoney = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  const hasProjectedRange = snapshot.projectedBalanceMin !== undefined && snapshot.projectedBalanceMax !== undefined && snapshot.projectedBalanceMin !== snapshot.projectedBalanceMax;
   const formatDate = (d: Date) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   
   const toInputDate = (d: Date) => {
@@ -106,8 +108,10 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus, langu
         {/* Projected */}
         <div className="flex flex-col items-end shrink-0 min-w-0 max-w-[35%]">
             <span className="text-[9px] sm:text-[10px] text-indigo-500 dark:text-indigo-400 uppercase tracking-widest font-bold truncate">{t.endPeriod}</span>
-            <span className={`text-xs xs:text-[13px] sm:text-xl font-mono font-bold leading-none tracking-tighter truncate ${snapshot.projectedBalance >= 0 ? 'text-indigo-600 dark:text-indigo-300' : 'text-rose-500 dark:text-rose-400'}`}>
-                {formatMoney(snapshot.projectedBalance)}
+            <span className={`${hasProjectedRange ? 'text-[10px] xs:text-[11px] sm:text-xl' : 'text-xs xs:text-[13px] sm:text-xl'} font-mono font-bold leading-none tracking-tighter truncate ${snapshot.projectedBalance >= 0 ? 'text-indigo-600 dark:text-indigo-300' : 'text-rose-500 dark:text-rose-400'}`}>
+                {hasProjectedRange
+                    ? `${formatCompactMoney(snapshot.projectedBalanceMin!)} – ${formatCompactMoney(snapshot.projectedBalanceMax!)}`
+                    : formatMoney(snapshot.projectedBalance)}
             </span>
         </div>
 
@@ -116,7 +120,7 @@ const SummaryBar: React.FC<Props> = ({ snapshot, onUpdateDate, syncStatus, langu
       {/* Mini Stats Line */}
       <div className="max-w-4xl mx-auto flex justify-between mt-1 sm:mt-2 pt-1 sm:pt-2 border-t border-gray-200 dark:border-gray-900 text-[9px] sm:text-xs font-mono text-gray-500 dark:text-gray-600">
          <span>{t.inc}: <span className="text-emerald-600 dark:text-emerald-500">+{formatMoney(snapshot.upcomingIncome)}</span></span>
-         <span>{t.exp}: <span className="text-rose-600 dark:text-rose-500">-{formatMoney(snapshot.upcomingExpenses)}</span></span>
+         <span>{t.exp}: <span className="text-rose-600 dark:text-rose-500">-{formatMoney(snapshot.upcomingExpenses)}{snapshot.upcomingExpensesMax !== undefined && snapshot.upcomingExpensesMax !== snapshot.upcomingExpenses ? ` – ${formatCompactMoney(snapshot.upcomingExpensesMax)}` : ''}</span></span>
       </div>
     </div>
   );

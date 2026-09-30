@@ -284,7 +284,7 @@ const PlanList: React.FC<Props> = ({
                                             className={`whitespace-nowrap min-w-[45px] ${plan.type === 'income' ? 'text-emerald-500 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
                                             style={amountStyle}
                                         >
-                                            {plan.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            {plan.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{plan.type === 'expense' && plan.approximateUpperAmount !== undefined && plan.approximateUpperAmount !== plan.amount ? ` – ${plan.approximateUpperAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
                                         </span>
                                     </div>
                                 </div>

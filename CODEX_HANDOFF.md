@@ -30,6 +30,7 @@ Read this before making changes to synchronization, persistence, importing, recu
 - Ordinary category deletion writes a category-table tombstone. Pulling it removes that category and records its name so tag harvesting does not recreate it. Explicitly re-adding the name through the category manager clears the matching local suppression/tombstone. Clear Data continues to tombstone the category table too.
 - Cycle-day changes stamp and upload independent metadata. Older cloud metadata cannot replace a newer local cycle-day change.
 - Current balance includes paid transactions only. A paid future-dated transaction retains its scheduled date, affects Current immediately, and displays a paid-early date pill until its scheduled local calendar day.
+- Expense transactions and recurring plans may store an optional `approximateUpperAmount`; old records omit it. Projected plan occurrences and unpaid ranged expenses in the selected billing period project as a balance range by subtracting upper amounts for the lower balance and base amounts for the upper balance. The range applies independently to each recurring occurrence. Income is added to both ends. Current balance continues to use only each transaction's base `amount`; ordinary unpaid transactions retain existing projection behavior. The field lives in the existing transaction/plan JSON payloads, so no database migration is needed.
 - Recurring period projections binary-search the anchor-based occurrence sequence to begin at the selected period, preserving weekly/monthly/yearly clamping and inclusive end dates without scanning old occurrences.
 - Transaction and plan IDs may be equal without their deletion state crossing entity boundaries. Categories have their own tombstone namespace.
 - Local snapshot merging retains records with no `lastModified` when no matching tombstone exists. When a tombstone exists, the established timestamp ordering applies; legacy timestamps are not invented during persistence.
@@ -58,11 +59,12 @@ Read this before making changes to synchronization, persistence, importing, recu
 
 - `tests/sync-regression.test.mjs` covers pull failure signaling, edit/delete timestamp conflicts, watermark-edge edits, force-upload after tombstones, safe legacy records, category tombstones and Clear Data, independent cycle metadata, entity-separated IDs, and the pending-sync gate.
 - `tests/local-state-regression.test.mjs` covers cross-tab reconciliation, reset markers, tombstones, and legacy transaction/plan/category persistence and reload.
-- `tests/security-01.test.mjs` covers safe arithmetic, rejection of executable-looking IDs and invalid imported values, whole-backup validation, and supported legacy backup migration.
+- `tests/security-01.test.mjs` covers safe arithmetic, rejection of executable-looking IDs and invalid imported values, whole-backup validation, supported legacy backup migration, and approximate-amount backup compatibility.
+- `tests/financial-state-regression.test.mjs`, `tests/local-state-regression.test.mjs`, and `tests/sync-regression.test.mjs` cover approximate projected ranges, recurring occurrences, persistence, and Supabase JSON payload compatibility.
 - `tests/date-only-regression.test.mjs` covers date-only parsing/formatting, recurrence month-end clamping, and billing-cycle boundaries.
 - `tests/recurring-occurrence.test.mjs` covers deterministic occurrence IDs and convergence to one transaction across devices.
 - `tests/pwa-build.test.mjs` checks generated production PWA paths; `tests/sync-listener-cleanup.test.mjs` checks matching online/offline listener registration and cleanup callbacks.
-- Latest verification: the complete regression suite passed (55 tests across all nine test files); `npm run build` passed; `git diff --check` passed.
+- Latest verification: all 63 tests across the nine regression files passed by running each test file directly with TypeScript `transpileModule` (avoiding test-runner/esbuild child processes); no tests were skipped. `tsc --noEmit` and `git diff --check` passed. `npm run build` was attempted once but Vite could not spawn its esbuild helper (`spawn EPERM`).
 
 ## Known limitations and risks
 

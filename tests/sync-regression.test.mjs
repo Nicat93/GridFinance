@@ -3,12 +3,11 @@ import { readFileSync } from 'node:fs';
 import Module from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
-import { transformSync } from 'esbuild';
+import ts from 'typescript';
 
 const servicePath = path.resolve('services/supabaseService.ts');
-const { code } = transformSync(readFileSync(servicePath, 'utf8'), {
-  loader: 'ts',
-  format: 'cjs',
+const { outputText: code } = ts.transpileModule(readFileSync(servicePath, 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 });
 const serviceModule = new Module(servicePath);
 serviceModule.filename = servicePath;
@@ -134,6 +133,31 @@ test('a local edit stamped at sync start remains eligible after the watermark ad
     );
     assert.equal(result.success, true);
     assert.ok(requests.flat().some(row => row.id === 'during-sync'));
+  } finally {
+    globalThis.fetch = originalFetch;
+    service.initSupabase('', '');
+  }
+});
+
+test('Supabase sync preserves optional approximate upper amounts in transaction and plan JSON data', async () => {
+  const originalFetch = globalThis.fetch;
+  const writes = [];
+  try {
+    globalThis.fetch = async (input, init) => {
+      const auth = authenticatedResponse(input);
+      if (auth) return auth;
+      const request = input instanceof Request ? input : new Request(input, init);
+      if (request.method !== 'GET') writes.push(...JSON.parse(await request.clone().text()));
+      return new Response('[]', { status: request.method === 'GET' ? 200 : 201, headers: { 'content-type': 'application/json' } });
+    };
+    service.initSupabase(config.supabaseUrl, config.supabaseKey, config.syncId);
+    const result = await service.pushChanges(config,
+      [{ id: 'range-tx', lastModified: 101, amount: 50, approximateUpperAmount: 70 }],
+      [{ id: 'range-plan', lastModified: 102, amount: 20, approximateUpperAmount: 35 }],
+      [], {}, 1, 0);
+    assert.equal(result.success, true);
+    assert.equal(writes.find(row => row.id === 'range-tx').data.approximateUpperAmount, 70);
+    assert.equal(writes.find(row => row.id === 'range-plan').data.approximateUpperAmount, 35);
   } finally {
     globalThis.fetch = originalFetch;
     service.initSupabase('', '');

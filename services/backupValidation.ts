@@ -29,6 +29,9 @@ const validTags = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every(tag => typeof tag === 'string');
 const validType = (value: unknown): value is TransactionType => value === 'income' || value === 'expense';
 const validAmount = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+const validApproximateUpperAmount = (item: Record<string, any>): boolean =>
+  item.approximateUpperAmount === undefined ||
+  (item.type === 'expense' && validAmount(item.approximateUpperAmount) && item.approximateUpperAmount >= item.amount);
 const invalid = (): never => { throw new Error('Backup contains invalid or unsupported data.'); };
 
 function migrateTags(item: Record<string, any>): unknown {
@@ -59,7 +62,7 @@ export function validateBackup(input: unknown, now = Date.now()): ValidatedBacku
 
   const transactions = input.transactions.map((raw: unknown): Transaction => {
     if (!isRecord(raw) || !isId(raw.id) || !isDate(raw.date) || typeof migrateDescription(raw) !== 'string' ||
-        !validAmount(raw.amount) || !validType(raw.type) || !validTags(migrateTags(raw)) ||
+        !validAmount(raw.amount) || !validType(raw.type) || !validApproximateUpperAmount(raw) || !validTags(migrateTags(raw)) ||
         (raw.isPaid !== undefined && typeof raw.isPaid !== 'boolean') ||
         (raw.relatedPlanId !== undefined && !isId(raw.relatedPlanId)) ||
         !validOptionalTimestamp(raw, 'lastModified')) return invalid();
@@ -67,6 +70,7 @@ export function validateBackup(input: unknown, now = Date.now()): ValidatedBacku
       id: raw.id, date: raw.date, description: migrateDescription(raw) as string, amount: raw.amount,
       type: raw.type, tags: migrateTags(raw) as string[], isPaid: raw.isPaid ?? false,
       ...(raw.relatedPlanId === undefined ? {} : { relatedPlanId: raw.relatedPlanId }),
+      ...(raw.approximateUpperAmount === undefined ? {} : { approximateUpperAmount: raw.approximateUpperAmount }),
       createdAt: migrateCreatedAt(raw, now),
       ...(raw.lastModified === undefined ? {} : { lastModified: raw.lastModified }),
     };
@@ -74,7 +78,7 @@ export function validateBackup(input: unknown, now = Date.now()): ValidatedBacku
   const frequencies = Object.values(Frequency);
   const plans = input.plans.map((raw: unknown): RecurringPlan => {
     if (!isRecord(raw) || !isId(raw.id) || typeof migrateDescription(raw) !== 'string' ||
-        !validAmount(raw.amount) || !validType(raw.type) || !frequencies.includes(raw.frequency) ||
+        !validAmount(raw.amount) || !validType(raw.type) || !validApproximateUpperAmount(raw) || !frequencies.includes(raw.frequency) ||
         !isDate(raw.startDate) || (raw.endDate !== undefined && !isDate(raw.endDate)) ||
         (raw.maxOccurrences !== undefined && (!Number.isInteger(raw.maxOccurrences) || raw.maxOccurrences < 1)) ||
         (raw.occurrencesGenerated !== undefined && (!Number.isInteger(raw.occurrencesGenerated) || raw.occurrencesGenerated < 0)) ||
@@ -84,6 +88,7 @@ export function validateBackup(input: unknown, now = Date.now()): ValidatedBacku
       frequency: raw.frequency, startDate: raw.startDate,
       ...(raw.endDate === undefined ? {} : { endDate: raw.endDate }),
       ...(raw.maxOccurrences === undefined ? {} : { maxOccurrences: raw.maxOccurrences }),
+      ...(raw.approximateUpperAmount === undefined ? {} : { approximateUpperAmount: raw.approximateUpperAmount }),
       occurrencesGenerated: raw.occurrencesGenerated ?? 0, tags: migrateTags(raw) as string[],
       createdAt: migrateCreatedAt(raw, now),
       ...(raw.lastModified === undefined ? {} : { lastModified: raw.lastModified }),

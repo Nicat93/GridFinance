@@ -53,6 +53,24 @@ test('import rejects string amounts without coercion and does not execute payloa
   delete globalThis.__security01;
 });
 
+test('backup import accepts legacy transactions without a range and preserves valid expense ranges', () => {
+  const legacy = validateBackup(backup([baseTx], []));
+  assert.equal(Object.hasOwn(legacy.transactions[0], 'approximateUpperAmount'), false);
+
+  const ranged = validateBackup(backup([{ ...baseTx, approximateUpperAmount: 70 }], [{ ...basePlan, approximateUpperAmount: 650 }]));
+  assert.equal(ranged.transactions[0].approximateUpperAmount, 70);
+  assert.equal(ranged.plans[0].approximateUpperAmount, 650);
+  const reloaded = JSON.parse(JSON.stringify(ranged));
+  assert.equal(reloaded.transactions[0].approximateUpperAmount, 70);
+  assert.equal(reloaded.plans[0].approximateUpperAmount, 650);
+});
+
+test('backup import rejects invalid approximate expense bounds and ranges on income', () => {
+  assert.throws(() => validateBackup(backup([{ ...baseTx, approximateUpperAmount: 12.49 }], [])));
+  assert.throws(() => validateBackup(backup([{ ...baseTx, type: 'income', approximateUpperAmount: 20 }], [])));
+  assert.throws(() => validateBackup(backup([baseTx], [{ ...basePlan, approximateUpperAmount: Infinity }])));
+});
+
 test('import rejects executable-looking IDs and malformed tags before returning a backup', () => {
   const payloadId = 'globalThis.__security01=true';
   assert.throws(() => validateBackup(backup([{ ...baseTx, id: payloadId }])));

@@ -241,7 +241,9 @@ const TransactionGrid: React.FC<Props> = ({
                                         className={`whitespace-nowrap min-w-[45px] ${tx.type === 'expense' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400'}`}
                                         style={amountStyle}
                                     >
-                                        {tx.type === 'expense' ? '-' : '+'}{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        {tx.type === 'expense' && tx.approximateUpperAmount !== undefined && tx.approximateUpperAmount !== tx.amount
+                                            ? `−(${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} – ${tx.approximateUpperAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`
+                                            : `${tx.type === 'expense' ? '-' : '+'}${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                                     </span>
                                 </div>
                             </div>

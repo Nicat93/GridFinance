@@ -3,21 +3,21 @@ import { readFileSync } from 'node:fs';
 import Module from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
-import { transformSync } from 'esbuild';
+import ts from 'typescript';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 require.extensions['.ts'] = (module, filePath) => {
-  const { code } = transformSync(readFileSync(filePath, 'utf8'), { loader: 'ts', format: 'cjs' });
+  const { outputText: code } = ts.transpileModule(readFileSync(filePath, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } });
   module._compile(code, filePath);
 };
 
 const file = path.resolve('services/localState.ts');
-const { code } = transformSync(readFileSync(file, 'utf8'), { loader: 'ts', format: 'cjs' });
+const { outputText: code } = ts.transpileModule(readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } });
 const mod = new Module(file); mod.filename = file; mod.paths = Module._nodeModulePaths(path.dirname(file)); mod._compile(code, file);
 const { mergeLocalSnapshots, LogicalClock, persistMergedSnapshot, readLocalSnapshot } = mod.exports;
 const validationFile = path.resolve('services/backupValidation.ts');
-const { code: validationCode } = transformSync(readFileSync(validationFile, 'utf8'), { loader: 'ts', format: 'cjs' });
+const { outputText: validationCode } = ts.transpileModule(readFileSync(validationFile, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } });
 const validationModule = new Module(validationFile); validationModule.filename = validationFile;
 validationModule.paths = Module._nodeModulePaths(path.dirname(validationFile)); validationModule._compile(validationCode, validationFile);
 const { validateBackup } = validationModule.exports;
@@ -67,6 +67,20 @@ test('legacy transaction without lastModified survives persistence and reload wi
   const state = { ...empty(), transactions: [{ id: 'legacy-tx', description: 'Legacy' }] };
   await persistMergedSnapshot(storage, state);
   assert.deepEqual(readLocalSnapshot(storage).transactions, state.transactions);
+});
+
+test('approximate upper amounts survive cross-tab merge and local persistence', async () => {
+  const state = {
+    ...empty(),
+    transactions: [{ id: 'range-tx', lastModified: 10, amount: 50, approximateUpperAmount: 70 }],
+    plans: [{ id: 'range-plan', lastModified: 11, amount: 20, approximateUpperAmount: 35 }],
+  };
+  const merged = mergeLocalSnapshots(empty(), state);
+  const storage = memoryStorage();
+  await persistMergedSnapshot(storage, merged);
+  const reloaded = readLocalSnapshot(storage);
+  assert.equal(reloaded.transactions[0].approximateUpperAmount, 70);
+  assert.equal(reloaded.plans[0].approximateUpperAmount, 35);
 });
 
 test('legacy plan without lastModified survives persistence and reload without a tombstone', async () => {

@@ -3,11 +3,11 @@ import { readFileSync } from 'node:fs';
 import Module from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
-import { transformSync } from 'esbuild';
+import ts from 'typescript';
 
 test('repeated service initialization reuses one client and updates the sync partition header', () => {
   const servicePath = path.resolve('services/supabaseService.ts');
-  const { code } = transformSync(readFileSync(servicePath, 'utf8'), { loader: 'ts', format: 'cjs' });
+  const { outputText: code } = ts.transpileModule(readFileSync(servicePath, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } });
   const constructions = [];
   const originalLoad = Module._load;
   let service;

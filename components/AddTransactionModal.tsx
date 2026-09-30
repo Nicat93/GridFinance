@@ -28,6 +28,8 @@ const pickColorForString = (str: string): string => {
 const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initialData, categories, language }) => {
   const [type, setType] = useState<TransactionType>('expense');
   const [amount, setAmount] = useState('');
+  const [approximateUpperAmount, setApproximateUpperAmount] = useState('');
+  const [amountError, setAmountError] = useState('');
   const [description, setDescription] = useState('');
   
   // Tag Selection State
@@ -82,6 +84,8 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
       if (initialData) {
         setType(initialData.type);
         setAmount(initialData.amount.toString());
+        setApproximateUpperAmount(initialData.type === 'expense' && initialData.approximateUpperAmount !== undefined ? initialData.approximateUpperAmount.toString() : '');
+        setAmountError('');
         setDescription(initialData.description || '');
         setSelectedTags(initialData.tags || []);
         
@@ -105,6 +109,8 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
       } else {
         setType('expense');
         setAmount('');
+        setApproximateUpperAmount('');
+        setAmountError('');
         setDescription('');
         setSelectedTags([]);
         const today = todayDateOnly();
@@ -123,9 +129,18 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanApproximateUpperAmount = approximateUpperAmount.trim();
+    const parsedUpperAmount = cleanApproximateUpperAmount === '' ? undefined : Number(cleanApproximateUpperAmount);
+    if (type === 'expense' && cleanApproximateUpperAmount !== '' &&
+        (!/^\d+(?:\.\d*)?$/.test(cleanApproximateUpperAmount) || !Number.isFinite(parsedUpperAmount) || parsedUpperAmount! < (parseFloat(amount) || 0))) {
+      setAmountError(t.approxAmountError);
+      return;
+    }
+    setAmountError('');
     const baseData = {
       description,
       amount: parseFloat(amount) || 0,
+      ...(type === 'expense' && parsedUpperAmount !== undefined ? { approximateUpperAmount: parsedUpperAmount } : {}),
       type,
       tags: selectedTags,
       date, 
@@ -250,32 +265,44 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
 
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
             
-            <div className="flex gap-3 h-10">
+            <div className="flex gap-2 h-10">
                 <div 
                     onClick={() => setCalcTarget('amount')}
-                    className={`flex-1 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white px-3 py-2 rounded text-left font-mono text-lg flex items-center cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors ${!amount ? 'text-gray-400' : ''}`}
+                    className={`flex-1 min-w-0 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white px-2 sm:px-3 py-2 rounded text-left font-mono text-lg flex items-center cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors ${!amount ? 'text-gray-400' : ''}`}
                 >
                     {amount ? amount : '0.00'}
                 </div>
+
+                {type === 'expense' && <input
+                    type="text"
+                    inputMode="decimal"
+                    value={approximateUpperAmount}
+                    onChange={e => { setApproximateUpperAmount(e.target.value); setAmountError(''); }}
+                    placeholder={t.approxMax}
+                    aria-label={`${t.amount} ${t.approxMax}`}
+                    title={`${t.amount} ${t.approxMax}`}
+                    className={`w-[4.5rem] sm:w-20 shrink-0 bg-gray-100 dark:bg-gray-900 border ${amountError ? 'border-rose-500' : 'border-gray-200 dark:border-gray-800'} text-gray-900 dark:text-white px-2 py-2 rounded text-sm sm:text-base font-mono focus:outline-none focus:border-indigo-500 placeholder:text-gray-400`}
+                />}
 
                 <div className="flex bg-gray-100 dark:bg-gray-900 rounded p-1 border border-gray-200 dark:border-gray-800 shrink-0">
                     <button 
                     type="button"
                     onClick={() => setType('expense')}
-                    className={`px-3 text-xs sm:text-sm font-bold rounded transition-colors flex items-center ${type === 'expense' ? 'bg-white dark:bg-rose-900 text-rose-600 dark:text-rose-200 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                    className={`px-2 sm:px-3 text-xs sm:text-sm font-bold rounded transition-colors flex items-center ${type === 'expense' ? 'bg-white dark:bg-rose-900 text-rose-600 dark:text-rose-200 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
                     >
                     - {t.exp}
                     </button>
                     <div className="w-px bg-gray-300 dark:bg-gray-700 mx-1"></div>
                     <button 
                     type="button"
-                    onClick={() => setType('income')}
-                    className={`px-3 text-xs sm:text-sm font-bold rounded transition-colors flex items-center ${type === 'income' ? 'bg-white dark:bg-emerald-900 text-emerald-600 dark:text-emerald-200 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                    onClick={() => { setType('income'); setApproximateUpperAmount(''); setAmountError(''); }}
+                    className={`px-2 sm:px-3 text-xs sm:text-sm font-bold rounded transition-colors flex items-center ${type === 'income' ? 'bg-white dark:bg-emerald-900 text-emerald-600 dark:text-emerald-200 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
                     >
                     + {t.inc}
                     </button>
                 </div>
             </div>
+            {amountError && <p className="-mt-3 text-[11px] text-rose-500" role="alert">{amountError}</p>}
 
             <div>
                 <input 

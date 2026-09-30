@@ -3,18 +3,18 @@ import { readFileSync } from 'node:fs';
 import Module from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
-import { transformSync } from 'esbuild';
+import ts from 'typescript';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 require.extensions['.ts'] = (module, filePath) => {
-  const { code } = transformSync(readFileSync(filePath, 'utf8'), { loader: 'ts', format: 'cjs' });
+  const { outputText: code } = ts.transpileModule(readFileSync(filePath, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } });
   module._compile(code, filePath);
 };
 
 const loadTypeScript = (relativePath) => {
   const filePath = path.resolve(relativePath);
-  const { code } = transformSync(readFileSync(filePath, 'utf8'), { loader: 'ts', format: 'cjs' });
+  const { outputText: code } = ts.transpileModule(readFileSync(filePath, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } });
   const loaded = new Module(filePath);
   loaded.filename = filePath;
   loaded.paths = Module._nodeModulePaths(path.dirname(filePath));

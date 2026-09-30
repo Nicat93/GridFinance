@@ -32,6 +32,8 @@ export interface Transaction {
   description: string;
   /** Monetary value */
   amount: number;
+  /** Optional upper end of an approximate expense amount */
+  approximateUpperAmount?: number;
   /** Income or Expense */
   type: TransactionType;
   /** Tags (formerly categories) */
@@ -54,6 +56,8 @@ export interface RecurringPlan {
   id: string;
   description: string;
   amount: number;
+  /** Optional upper end of an approximate expense amount */
+  approximateUpperAmount?: number;
   type: TransactionType;
   frequency: Frequency;
   /** Anchor date for the recurrence calculation */
@@ -76,7 +80,10 @@ export interface RecurringPlan {
 export interface FinancialSnapshot {
   currentBalance: number;
   projectedBalance: number;
+  projectedBalanceMin?: number;
+  projectedBalanceMax?: number;
   upcomingExpenses: number;
+  upcomingExpensesMax?: number;
   upcomingIncome: number;
   periodStart: Date;
   periodEnd: Date;

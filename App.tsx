@@ -22,6 +22,7 @@ import { translations } from './translations';
 import { validateBackup } from './services/backupValidation';
 import { addDateOnly, calculateBillingPeriod, dateOnlyToLocalDate, formatDateOnly, isDateOnlyAfter, todayDateOnly } from './services/dateOnly';
 import { affectsCurrentBalance } from './services/financialState';
+import { calculateProjectedBalance, getApproximateUnpaidExpenseOccurrences } from './services/projectedBalance';
 import { LogicalClock, mergeLocalSnapshots, persistMergedSnapshot, readLocalSnapshot } from './services/localState';
 
 // --- Utility Functions ---
@@ -508,16 +509,28 @@ export default function App() {
     const periodStartDate = formatDateOnly(periodStart);
     const periodEndDate = formatDateOnly(periodEnd);
 
-    let projectedBalance = currentBalance;
     let upcomingIncome = 0;
     let upcomingExpenses = 0;
+    let upcomingExpensesMax = 0;
+    const projectedOccurrences: { amount: number; type: 'income' | 'expense'; approximateUpperAmount?: number }[] = [];
 
     plans.forEach(plan => getPlanOccurrencesInRange(plan, periodStartDate, periodEndDate).forEach(() => {
-        if (plan.type === 'income') { upcomingIncome += plan.amount; projectedBalance += plan.amount; }
-        else { upcomingExpenses += plan.amount; projectedBalance -= plan.amount; }
+        projectedOccurrences.push({ amount: plan.amount, type: plan.type, approximateUpperAmount: plan.approximateUpperAmount });
+        if (plan.type === 'income') upcomingIncome += plan.amount;
+        else {
+            upcomingExpenses += plan.amount;
+            upcomingExpensesMax += plan.approximateUpperAmount ?? plan.amount;
+        }
     }));
 
-    return { currentBalance, projectedBalance, upcomingIncome, upcomingExpenses, periodStart, periodEnd };
+    const uncertainTransactions = getApproximateUnpaidExpenseOccurrences(transactions, periodStartDate, periodEndDate);
+    projectedOccurrences.push(...uncertainTransactions);
+    uncertainTransactions.forEach(transaction => {
+        upcomingExpenses += transaction.amount;
+        upcomingExpensesMax += transaction.approximateUpperAmount ?? transaction.amount;
+    });
+
+    return { currentBalance, ...calculateProjectedBalance(currentBalance, projectedOccurrences), upcomingIncome, upcomingExpenses, upcomingExpensesMax, periodStart, periodEnd };
   }, [transactions, plans, cycleStartDay, viewDate, today]);
 
   const handleClearDataRequest = () => {
@@ -786,6 +799,7 @@ export default function App() {
              const updatedPlan = {
                 ...editingItem,
                 description: finalDescription, amount: data.amount, type: data.type, tags: finalTags,
+                approximateUpperAmount: data.approximateUpperAmount,
                 startDate: data.date, frequency: data.frequency, maxOccurrences: data.maxOccurrences,
                 // Preserve original createdAt
                 createdAt: editingItem.createdAt || now,
@@ -796,6 +810,7 @@ export default function App() {
             const updatedTx = {
                 ...editingItem,
                 description: finalDescription, amount: data.amount, type: data.type, tags: finalTags, date: data.date,
+                approximateUpperAmount: data.approximateUpperAmount,
                 // Preserve original createdAt
                 createdAt: editingItem.createdAt || now,
                 lastModified: now
@@ -807,6 +822,7 @@ export default function App() {
         if (data.kind === 'single') {
             const newTx: Transaction = {
                 id: generateId(), date: data.date, description: finalDescription, amount: data.amount,
+                ...(data.approximateUpperAmount === undefined ? {} : { approximateUpperAmount: data.approximateUpperAmount }),
                 type: data.type, tags: finalTags, isPaid: true,
                 createdAt: now,
                 lastModified: now
@@ -820,6 +836,7 @@ export default function App() {
             const newPlan: RecurringPlan = {
                 id: generateId(), description: finalDescription,
                 amount: finalPlanAmount,
+                ...(data.approximateUpperAmount === undefined ? {} : { approximateUpperAmount: data.isLoan ? data.approximateUpperAmount / count : data.approximateUpperAmount }),
                 type: data.type,
                 frequency: data.frequency, startDate: finalPlanStartDate, occurrencesGenerated: 0, tags: finalTags,
                 maxOccurrences: data.maxOccurrences,
@@ -858,6 +875,7 @@ export default function App() {
     const newTx: Transaction = {
         id: getRecurringOccurrenceId(plan.id, dateStr), date: dateStr, description: plan.description,
         amount: plan.amount, type: plan.type, tags: plan.tags, isPaid, relatedPlanId: plan.id,
+        ...(plan.approximateUpperAmount === undefined ? {} : { approximateUpperAmount: plan.approximateUpperAmount }),
         createdAt: now,
         lastModified: now
     };
@@ -924,6 +942,7 @@ export default function App() {
                   const newDateStr = targetDate.getFullYear() + '-' + String(targetDate.getMonth() + 1).padStart(2, '0') + '-' + String(targetDate.getDate()).padStart(2, '0');
                   const newPlan: RecurringPlan = {
                       id: generateId(), description: plan.description, amount: plan.amount, type: plan.type,
+                      ...(plan.approximateUpperAmount === undefined ? {} : { approximateUpperAmount: plan.approximateUpperAmount }),
                       frequency: Frequency.ONE_TIME, startDate: newDateStr, occurrencesGenerated: 0, tags: plan.tags,
                       createdAt: now,
                       lastModified: now
