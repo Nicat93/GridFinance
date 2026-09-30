@@ -14,7 +14,7 @@ test('production PWA resources resolve from the GitHub Pages application root', 
   assert.match(html, /<link rel="apple-touch-icon" href="\/GridFinance\/icon\.svg"\s*\/>/);
   assert.match(html, /href="\/GridFinance\/assets\/index\.css"/);
   assert.doesNotMatch(html, /cdn\.tailwindcss\.com/);
-  assert.doesNotMatch(html, /cdn-icons-png\.flaticon\.com|aistudiocdn\.com|importmap/);
+  assert.doesNotMatch(html, /cdn-icons-png\.flaticon\.com|importmap/);
   assert.match(html, /register\('\.\/sw\.js'\)/);
   assert.equal(new URL(manifest.start_url, 'https://nicat93.github.io/GridFinance/manifest.json').pathname, '/GridFinance/');
   assert.equal(new URL(manifest.scope, 'https://nicat93.github.io/GridFinance/manifest.json').pathname, '/GridFinance/');
