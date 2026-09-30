@@ -68,7 +68,7 @@ Read this before making changes to synchronization, persistence, importing, recu
 - `tests/date-only-regression.test.mjs` covers date-only parsing/formatting, recurrence month-end clamping, and billing-cycle boundaries.
 - `tests/recurring-occurrence.test.mjs` covers deterministic occurrence IDs and convergence to one transaction across devices.
 - `tests/pwa-build.test.mjs` checks generated production PWA paths; `tests/sync-listener-cleanup.test.mjs` checks matching online/offline listener registration and cleanup callbacks.
-- Latest verification: 67 tests across the nine non-build regression files passed when run directly (TypeScript `transpileModule`); `tsc --noEmit`, `git diff --check`, and in-process Tailwind CSS generation checks passed. `npm run build` was attempted once but Vite could not spawn its esbuild helper (`spawn EPERM`), so the production-output PWA test and deployed/offline verification remain unverified for this change.
+- Latest verification: 67 tests across the nine non-build regression files passed when run directly (TypeScript `transpileModule`); `tsc --noEmit`, `git diff --check`, and in-process Tailwind CSS generation checks passed. `npm run build` was attempted once but Vite could not spawn its esbuild helper (`spawn EPERM`), so the local production-output PWA test remains unverified. GitHub Pages at `/GridFinance/` now serves `assets/index.css` and `assets/index.js`; the deployed stylesheet contains the expected theme, palette, and 44px narrow-control rules, and service-worker `v67` precaches that CSS. A normal desktop page load showed no obvious styling regression and no Tailwind CDN asset request. A genuine offline reload and narrow-width rendering were not tested.
 
 ## Known limitations and risks
 
