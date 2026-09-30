@@ -11,6 +11,9 @@ import { createClient } from '@supabase/supabase-js';
 import { BackupData, SyncConfig, Transaction, RecurringPlan, CategoryDef } from '../types';
 
 let supabase: any = null;
+let supabaseUrl: string | null = null;
+let supabaseKey: string | null = null;
+let syncHeaders: Record<string, string> | null = null;
 
 // --- Interfaces for DB Rows ---
 interface DBRow {
@@ -27,12 +30,28 @@ interface DBRow {
 export const initSupabase = (url: string, key: string, syncId = '') => {
     if (!url || !key) {
         supabase = null;
+        supabaseUrl = null;
+        supabaseKey = null;
+        syncHeaders = null;
         return;
     }
+
+    // App effects and sync actions can both initialize the service. Keep one
+    // GoTrue client for a given Supabase endpoint/key and update only the
+    // partition header as the active sync ID changes.
+    if (supabase && supabaseUrl === url && supabaseKey === key && syncHeaders) {
+        if (syncId) syncHeaders['x-gridfinance-sync-id'] = syncId;
+        else delete syncHeaders['x-gridfinance-sync-id'];
+        return;
+    }
+
+    syncHeaders = syncId ? { 'x-gridfinance-sync-id': syncId } : {};
     supabase = createClient(url, key, {
-        global: { headers: syncId ? { 'x-gridfinance-sync-id': syncId } : {} },
+        global: { headers: syncHeaders },
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     });
+    supabaseUrl = url;
+    supabaseKey = key;
 };
 
 // Helper: Get estimated size of payload in bytes
