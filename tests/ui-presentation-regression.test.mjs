@@ -93,5 +93,6 @@ test('calculator triggers render as keyboard-operable buttons with accessible na
   }));
   assert.match(html, /<button type="button" aria-label="Amount: 0\.00" aria-haspopup="dialog"/);
   assert.match(html, /<button type="button" aria-label="Max: not set" aria-haspopup="dialog"/);
+  assert.equal((html.match(/max-\[360px\]:min-h-11/g) ?? []).length, 2, 'both narrow-layout type controls must have 44px minimum hit areas');
   assert.match(html, /focus-visible:outline-indigo-500/);
 });
