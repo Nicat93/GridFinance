@@ -7,6 +7,7 @@ import { Transaction, RecurringPlan, Frequency, FinancialSnapshot, SyncConfig, B
 import TransactionGrid from './components/TransactionGrid';
 import SummaryBar from './components/SummaryBar';
 import AddTransactionModal from './components/AddTransactionModal';
+import CalculatorSheet from './components/CalculatorSheet';
 import PlanList from './components/PlanList';
 import ConfirmModal from './components/ConfirmModal';
 import SettingsModal from './components/SettingsModal';
@@ -16,7 +17,7 @@ import DesignDebugger, { DesignConfig } from './components/DesignDebugger';
 import CategoryManager from './components/CategoryManager';
 import DateRangeModal from './components/DateRangeModal';
 import * as SupabaseService from './services/supabaseService';
-import { getPlanOccurrencesInRange, getRecurringOccurrenceId } from './services/recurrence';
+import { getPlanOccurrencesInRange } from './services/recurrence';
 import { APP_VERSION } from './version';
 import { translations } from './translations';
 import { validateBackup } from './services/backupValidation';
@@ -24,6 +25,8 @@ import { addDateOnly, calculateBillingPeriod, dateOnlyToLocalDate, formatDateOnl
 import { affectsCurrentBalance } from './services/financialState';
 import { calculateProjectedBalance, getApproximateUnpaidExpenseOccurrences } from './services/projectedBalance';
 import { LogicalClock, mergeLocalSnapshots, persistMergedSnapshot, readLocalSnapshot } from './services/localState';
+import { evaluateArithmetic } from './services/safeArithmetic';
+import { createAppliedTransaction, createExactTransactionFromPlan, createPlannedPlan } from './services/plannedPayments';
 
 // --- Utility Functions ---
 
@@ -173,7 +176,8 @@ export default function App() {
       pillRadius: 4
   });
 
-  const [shiftCycleDialog, setShiftCycleDialog] = useState<{ isOpen: boolean, planId: string, newDate: Date } | null>(null);
+  const [shiftCycleDialog, setShiftCycleDialog] = useState<{ isOpen: boolean, planId: string, newDate: Date, actualAmount?: number } | null>(null);
+  const [pendingActualAmount, setPendingActualAmount] = useState<{ planId: string, date: Date, isPaid: boolean, fromTransition?: boolean } | null>(null);
   const [transitionState, setTransitionState] = useState<{ isOpen: boolean, targetDate: Date, pendingItems: { plan: RecurringPlan, due: Date }[] } | null>(null);
   const [isClearDataConfirmOpen, setIsClearDataConfirmOpen] = useState(false);
   const [isClearingData, setIsClearingData] = useState(false);
@@ -796,33 +800,55 @@ export default function App() {
     if (editingItem) {
         const isPlan = 'frequency' in editingItem;
         if (isPlan) {
-             const updatedPlan = {
-                ...editingItem,
-                description: finalDescription, amount: data.amount, type: data.type, tags: finalTags,
-                approximateUpperAmount: data.approximateUpperAmount,
-                startDate: data.date, frequency: data.frequency, maxOccurrences: data.maxOccurrences,
-                // Preserve original createdAt
-                createdAt: editingItem.createdAt || now,
-                lastModified: now
-            } as RecurringPlan;
-            setPlans(prev => prev.map(p => p.id === editingItem.id ? updatedPlan : p));
+            if (data.isPlanned) {
+                const { approximateUpperAmount: _oldRange, ...planWithoutRange } = editingItem;
+                const updatedPlan = {
+                    ...planWithoutRange,
+                    description: finalDescription, amount: data.amount, type: data.type, tags: finalTags,
+                    ...(data.approximateUpperAmount === undefined ? {} : { approximateUpperAmount: data.approximateUpperAmount }),
+                    startDate: data.date, frequency: data.frequency, maxOccurrences: data.maxOccurrences,
+                    createdAt: editingItem.createdAt || now,
+                    lastModified: now
+                } as RecurringPlan;
+                setPlans(prev => prev.map(p => p.id === editingItem.id ? updatedPlan : p));
+            } else {
+                const actual = createExactTransactionFromPlan({
+                    id: generateId(), date: data.date, description: finalDescription, amount: data.amount,
+                    type: data.type, tags: finalTags,
+                    createdAt: editingItem.createdAt || now, lastModified: now
+                });
+                setPlanDeletedIds(prev => ({ ...prev, [editingItem.id]: now }));
+                setPlans(prev => prev.filter(p => p.id !== editingItem.id));
+                setTransactions(prev => [actual, ...prev]);
+            }
         } else {
-            const updatedTx = {
-                ...editingItem,
-                description: finalDescription, amount: data.amount, type: data.type, tags: finalTags, date: data.date,
-                approximateUpperAmount: data.approximateUpperAmount,
-                // Preserve original createdAt
-                createdAt: editingItem.createdAt || now,
-                lastModified: now
-            } as Transaction;
-            setTransactions(prev => prev.map(t => t.id === editingItem.id ? updatedTx : t));
+            if (data.isPlanned) {
+                const plan = createPlannedPlan({
+                    id: generateId(), description: finalDescription, amount: data.amount,
+                    type: data.type, frequency: data.frequency,
+                    maxOccurrences: data.maxOccurrences, tags: finalTags, date: data.date,
+                    approximateUpperAmount: data.approximateUpperAmount,
+                    createdAt: editingItem.createdAt || now, lastModified: now
+                });
+                setTransactionDeletedIds(prev => ({ ...prev, [editingItem.id]: now }));
+                setTransactions(prev => prev.filter(t => t.id !== editingItem.id));
+                setPlans(prev => [...prev, plan]);
+            } else {
+                const { approximateUpperAmount: _discardedRange, ...exactTransaction } = editingItem;
+                const updatedTx = {
+                    ...exactTransaction,
+                    description: finalDescription, amount: data.amount, type: data.type, tags: finalTags, date: data.date,
+                    createdAt: editingItem.createdAt || now,
+                    lastModified: now
+                } as Transaction;
+                setTransactions(prev => prev.map(t => t.id === editingItem.id ? updatedTx : t));
+            }
         }
         setEditingItem(null);
     } else {
         if (data.kind === 'single') {
             const newTx: Transaction = {
                 id: generateId(), date: data.date, description: finalDescription, amount: data.amount,
-                ...(data.approximateUpperAmount === undefined ? {} : { approximateUpperAmount: data.approximateUpperAmount }),
                 type: data.type, tags: finalTags, isPaid: true,
                 createdAt: now,
                 lastModified: now
@@ -866,19 +892,13 @@ export default function App() {
     }
   };
 
-  const executePlanApplication = (planId: string, applyDate: Date, isPaid = false) => {
+  const executePlanApplication = (planId: string, applyDate: Date, isPaid = false, actualAmount?: number) => {
     const plan = plans.find(p => p.id === planId);
     if (!plan) return;
     const now = nextLogicalTime();
     const dateStr = applyDate.getFullYear() + '-' + String(applyDate.getMonth() + 1).padStart(2, '0') + '-' + String(applyDate.getDate()).padStart(2, '0');
 
-    const newTx: Transaction = {
-        id: getRecurringOccurrenceId(plan.id, dateStr), date: dateStr, description: plan.description,
-        amount: plan.amount, type: plan.type, tags: plan.tags, isPaid, relatedPlanId: plan.id,
-        ...(plan.approximateUpperAmount === undefined ? {} : { approximateUpperAmount: plan.approximateUpperAmount }),
-        createdAt: now,
-        lastModified: now
-    };
+    const newTx = createAppliedTransaction(plan, dateStr, isPaid, now, now, actualAmount);
     setTransactions(prev => [newTx, ...prev]);
 
     if (plan.frequency === Frequency.ONE_TIME) {
@@ -923,8 +943,16 @@ export default function App() {
       const item = transitionState.pendingItems.find(i => i.plan.id === planId);
       if (!item) return;
       const now = nextLogicalTime();
+      let removeFromTransition = true;
 
-      if (action === 'paid') { executePlanApplication(planId, item.due, true); }
+      if (action === 'paid') {
+          const currentPlan = plans.find(p => p.id === planId);
+          if (currentPlan?.approximateUpperAmount !== undefined) {
+              setPendingActualAmount({ planId, date: item.due, isPaid: true, fromTransition: true });
+              removeFromTransition = false;
+          }
+          else executePlanApplication(planId, item.due, true);
+      }
       else if (action === 'cancel') {
           const plan = plans.find(p => p.id === planId);
           if (plan) {
@@ -952,7 +980,7 @@ export default function App() {
           }
       }
 
-      setTransitionState(prev => {
+      if (removeFromTransition) setTransitionState(prev => {
           if (!prev) return null;
           return { ...prev, pendingItems: prev.pendingItems.filter(i => i.plan.id !== planId) };
       });
@@ -966,18 +994,54 @@ export default function App() {
       }
   };
 
-  const handleApplyPlanNow = (planId: string) => {
+  const requestPlanApplication = (planId: string, newDate: Date, isPaid = false, actualAmount?: number) => {
     const plan = plans.find(p => p.id === planId);
     if (!plan) return;
-    if (plan.maxOccurrences && plan.occurrencesGenerated >= plan.maxOccurrences) { alert("Max payments reached."); return; }
-
-    const newDate = addTime(plan.startDate, plan.frequency, plan.occurrencesGenerated); newDate.setHours(0,0,0,0);
     const currentPeriodEnd = new Date(snapshot.periodEnd); currentPeriodEnd.setHours(23, 59, 59, 999);
     const nextPeriodEnd = calculateBillingPeriod(new Date(snapshot.periodEnd.getFullYear(), snapshot.periodEnd.getMonth() + 1, 1), cycleStartDay).end;
 
     if (newDate > nextPeriodEnd) { alert(`Too far: ${newDate.toLocaleDateString()}`); return; }
-    if (newDate > currentPeriodEnd) { setShiftCycleDialog({ isOpen: true, planId, newDate }); }
-    else { executePlanApplication(planId, newDate); }
+    if (newDate > currentPeriodEnd) { setShiftCycleDialog({ isOpen: true, planId, newDate, actualAmount }); }
+    else { executePlanApplication(planId, newDate, false, actualAmount); }
+  };
+
+  const beginPlanApplication = (planId: string, date: Date, isPaid = false) => {
+    const plan = plans.find(p => p.id === planId);
+    if (!plan) return;
+    if (plan.approximateUpperAmount !== undefined && plan.type === 'expense') {
+      setPendingActualAmount({ planId, date, isPaid });
+      return;
+    }
+    requestPlanApplication(planId, date, isPaid);
+  };
+
+  const handleActualAmount = (value: string): boolean => {
+    if (!pendingActualAmount) return true;
+    try {
+      const actualAmount = evaluateArithmetic(value);
+      if (!Number.isFinite(actualAmount) || actualAmount < 0) {
+        alert('Enter a valid non-negative actual amount.');
+        return false;
+      }
+      const pending = pendingActualAmount;
+      setPendingActualAmount(null);
+      if (pending.isPaid) executePlanApplication(pending.planId, pending.date, true, actualAmount);
+      else requestPlanApplication(pending.planId, pending.date, false, actualAmount);
+      if (pending.fromTransition) setTransitionState(prev => prev ? { ...prev, pendingItems: prev.pendingItems.filter(item => item.plan.id !== pending.planId) } : null);
+      return true;
+    } catch {
+      // CalculatorSheet only returns expressions accepted by the shared safe arithmetic parser.
+      alert('Enter a valid non-negative actual amount.');
+      return false;
+    }
+  };
+
+  const handleApplyPlanNow = (planId: string) => {
+    const plan = plans.find(p => p.id === planId);
+    if (!plan) return;
+    if (plan.maxOccurrences && plan.occurrencesGenerated >= plan.maxOccurrences) { alert("Max payments reached."); return; }
+    const newDate = addTime(plan.startDate, plan.frequency, plan.occurrencesGenerated); newDate.setHours(0,0,0,0);
+    beginPlanApplication(planId, newDate);
   };
 
   const deleteTransaction = (id: string) => {
@@ -998,8 +1062,8 @@ export default function App() {
       setPlans(prev => prev.filter(p => p.id !== id));
   };
 
-  const handleConfirmShiftCycle = () => { if (shiftCycleDialog) { setLocalCycleStartDay(shiftCycleDialog.newDate.getDate()); setViewDate(shiftCycleDialog.newDate); executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate); setShiftCycleDialog(null); } };
-  const handleAlternativeKeepCycle = () => { if (shiftCycleDialog) { executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate); setShiftCycleDialog(null); } };
+  const handleConfirmShiftCycle = () => { if (shiftCycleDialog) { setLocalCycleStartDay(shiftCycleDialog.newDate.getDate()); setViewDate(shiftCycleDialog.newDate); executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate, false, shiftCycleDialog.actualAmount); setShiftCycleDialog(null); } };
+  const handleAlternativeKeepCycle = () => { if (shiftCycleDialog) { executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate, false, shiftCycleDialog.actualAmount); setShiftCycleDialog(null); } };
 
   // Translations helper
   const t = translations[language];
@@ -1098,6 +1162,13 @@ export default function App() {
       )}
       <AddTransactionModal
         isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingItem(null); }} onSave={handleSaveData} initialData={editingItem} categories={categoryDefs} language={language}
+      />
+      <CalculatorSheet
+        isOpen={!!pendingActualAmount}
+        initialValue={String(plans.find(plan => plan.id === pendingActualAmount?.planId)?.amount ?? '')}
+        onClose={() => setPendingActualAmount(null)}
+        onApply={handleActualAmount}
+        calculatorLabel={t.actualAmount}
       />
       <SettingsModal
         isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)}

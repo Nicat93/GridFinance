@@ -38,7 +38,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   
   const [date, setDate] = useState(todayDateOnly());
   
-  const [isRecurring, setIsRecurring] = useState(false);
+  const [isRecurring, setIsRecurring] = useState(!!(initialData && 'frequency' in initialData));
   const [frequency, setFrequency] = useState<Frequency>(Frequency.MONTHLY);
   const [maxOccurrences, setMaxOccurrences] = useState('');
   const [isLoan, setIsLoan] = useState(false);
@@ -101,7 +101,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
       if (initialData) {
         setType(initialData.type);
         setAmount(initialData.amount.toString());
-        setApproximateUpperAmount(initialData.type === 'expense' && initialData.approximateUpperAmount !== undefined ? initialData.approximateUpperAmount.toString() : '');
+        setApproximateUpperAmount('frequency' in initialData && initialData.type === 'expense' && initialData.approximateUpperAmount !== undefined ? initialData.approximateUpperAmount.toString() : '');
         setAmountError('');
         setDescription(initialData.description || '');
         setSelectedTags(initialData.tags || []);
@@ -157,10 +157,11 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
     const baseData = {
       description,
       amount: parseFloat(amount) || 0,
-      ...(type === 'expense' && parsedUpperAmount !== undefined ? { approximateUpperAmount: parsedUpperAmount } : {}),
+      ...(isRecurring && type === 'expense' && parsedUpperAmount !== undefined ? { approximateUpperAmount: parsedUpperAmount } : {}),
       type,
       tags: selectedTags,
       date, 
+      isPlanned: isRecurring,
     };
 
     if (isRecurring) {
@@ -297,7 +298,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                     {amount ? amount : '0.00'}
                 </button>
 
-                {type === 'expense' && <div className={`w-[4.5rem] sm:w-20 shrink-0 max-[360px]:w-full max-[360px]:min-w-0 flex bg-gray-100 dark:bg-gray-900 border ${amountError ? 'border-rose-500' : 'border-gray-200 dark:border-gray-800'} rounded`}>
+                {isRecurring && type === 'expense' && <div className={`w-[4.5rem] sm:w-20 shrink-0 max-[360px]:w-full max-[360px]:min-w-0 flex bg-gray-100 dark:bg-gray-900 border ${amountError ? 'border-rose-500' : 'border-gray-200 dark:border-gray-800'} rounded`}>
                     <button
                         type="button"
                         ref={maxCalculatorRef}
@@ -427,7 +428,10 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                     <input 
                         type="checkbox" 
                         checked={isRecurring}
-                        onChange={e => setIsRecurring(e.target.checked)}
+                        onChange={e => {
+                            setIsRecurring(e.target.checked);
+                            if (!e.target.checked) { setApproximateUpperAmount(''); setAmountError(''); }
+                        }}
                         className="w-5 h-5 accent-indigo-600"
                     />
                 </div>

@@ -84,15 +84,21 @@ test('expandable rows activate on Enter and Space and ignore nested controls', (
   }
 });
 
-test('calculator triggers render as keyboard-operable buttons with accessible names and values', () => {
+test('Max calculator is hidden for actual expenses and shown for planned expenses', () => {
   const React = require('react');
   const { renderToStaticMarkup } = require('react-dom/server');
   const { default: AddTransactionModal } = loadTypeScript('components/AddTransactionModal.tsx');
-  const html = renderToStaticMarkup(React.createElement(AddTransactionModal, {
+  const actualHtml = renderToStaticMarkup(React.createElement(AddTransactionModal, {
     isOpen: true, onClose: () => {}, onSave: () => {}, categories: [], language: 'en',
   }));
-  assert.match(html, /<button type="button" aria-label="Amount: 0\.00" aria-haspopup="dialog"/);
-  assert.match(html, /<button type="button" aria-label="Max: not set" aria-haspopup="dialog"/);
-  assert.equal((html.match(/max-\[360px\]:min-h-11/g) ?? []).length, 2, 'both narrow-layout type controls must have 44px minimum hit areas');
-  assert.match(html, /focus-visible:outline-indigo-500/);
+  assert.match(actualHtml, /<button type="button" aria-label="Amount: 0\.00" aria-haspopup="dialog"/);
+  assert.doesNotMatch(actualHtml, /aria-label="Max:/);
+  assert.equal((actualHtml.match(/max-\[360px\]:min-h-11/g) ?? []).length, 2, 'both narrow-layout type controls must have 44px minimum hit areas');
+  assert.match(actualHtml, /focus-visible:outline-indigo-500/);
+
+  const plannedHtml = renderToStaticMarkup(React.createElement(AddTransactionModal, {
+    isOpen: true, onClose: () => {}, onSave: () => {}, categories: [], language: 'en',
+    initialData: { id: 'plan', description: 'Plan', amount: 50, approximateUpperAmount: 70, type: 'expense', frequency: 'One-time', startDate: '2026-09-30', occurrencesGenerated: 0, tags: [], createdAt: 1 },
+  }));
+  assert.match(plannedHtml, /aria-label="Max: not set" aria-haspopup="dialog"/);
 });

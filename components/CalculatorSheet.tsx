@@ -6,7 +6,7 @@ interface Props {
   isOpen: boolean;
   initialValue: string;
   onClose: () => void;
-  onApply: (value: string) => void;
+  onApply: (value: string) => void | boolean;
   calculatorLabel: string;
 }
 
@@ -115,8 +115,7 @@ const CalculatorSheet: React.FC<Props> = ({ isOpen, initialValue, onClose, onApp
     if (equation) {
         finalValue = calculate();
     }
-    onApply(finalValue);
-    onClose();
+    if (onApply(finalValue) !== false) onClose();
   };
 
   return (
@@ -134,8 +133,9 @@ const CalculatorSheet: React.FC<Props> = ({ isOpen, initialValue, onClose, onApp
         
         {/* Display Screen */}
         <div className="bg-gray-100 dark:bg-gray-900 rounded-xl p-4 flex flex-col items-end justify-center h-24 border border-gray-200 dark:border-gray-800">
-            <div className="text-gray-500 dark:text-gray-400 text-xs font-mono h-4">
-                {equation}
+            <div className="text-gray-500 dark:text-gray-400 text-xs font-mono h-4 flex justify-between gap-2">
+                <span className="truncate">{calculatorLabel}</span>
+                <span>{equation}</span>
             </div>
             <div className="text-gray-900 dark:text-gray-100 text-3xl sm:text-4xl font-mono font-bold tracking-tighter truncate w-full text-right">
                 {display}

@@ -18,17 +18,19 @@ export interface ProjectedTransaction {
   date: string;
   isPaid: boolean;
   type: TransactionType;
+  relatedPlanId?: string;
 }
 
-/** Only uncertain unpaid expenses are additional projection inputs; un-ranged
- * transactions keep the app's existing projection behavior. */
+/** Ranged unpaid expenses and exact unpaid plan occurrences are projected;
+ * ordinary un-ranged transactions keep the app's existing behavior. */
 export const getApproximateUnpaidExpenseOccurrences = (
   transactions: ProjectedTransaction[],
   periodStart: string,
   periodEnd: string,
 ): ProjectedOccurrence[] => transactions
   .filter(transaction => !transaction.isPaid && transaction.type === 'expense' &&
-    transaction.approximateUpperAmount !== undefined && transaction.date >= periodStart && transaction.date <= periodEnd)
+    (transaction.approximateUpperAmount !== undefined || transaction.relatedPlanId !== undefined) &&
+    transaction.date >= periodStart && transaction.date <= periodEnd)
   .map(({ amount, type, approximateUpperAmount }) => ({ amount, type, approximateUpperAmount }));
 
 /** Add projected occurrences to Current, keeping expense uncertainty as a balance range. */

@@ -28,6 +28,7 @@ const { validateBackup } = loadTypeScript('services/backupValidation.ts');
 const { affectsCurrentBalance, getPaidVisualState } = loadTypeScript('services/financialState.ts');
 const { getPlanOccurrencesInRange } = loadTypeScript('services/recurrence.ts');
 const { calculateProjectedBalance, getApproximateUnpaidExpenseOccurrences } = loadTypeScript('services/projectedBalance.ts');
+const { createAppliedTransaction, createExactTransactionFromPlan, createPlannedPlan, getPlannedApproximateAmount } = loadTypeScript('services/plannedPayments.ts');
 const transaction = (date, isPaid, type = 'expense', amount = 10) => ({ id: `${date}-${isPaid}`, date, isPaid, type, amount });
 
 test('Current balance eligibility follows payment state for past, today, and future dates', () => {
@@ -94,6 +95,87 @@ test('recurring projected occurrences apply the approximate range to every occur
   const result = calculateProjectedBalance(1000, occurrences.map(() => ({ amount: 40, approximateUpperAmount: 50, type: 'expense' })));
   assert.equal(occurrences.length, 3);
   assert.deepEqual(result, { projectedBalance: 880, projectedBalanceMin: 850, projectedBalanceMax: 880 });
+});
+
+const rangedPlan = overrides => ({
+  id: 'ranged-plan', description: 'Recurring expense', amount: 40, approximateUpperAmount: 50,
+  type: 'expense', frequency: Frequency.WEEKLY, startDate: '2026-09-29', occurrencesGenerated: 0,
+  tags: [], createdAt: 1, ...overrides,
+});
+
+test('new and edited Planned entries dated today remain plans, while neighboring dates stay date-only', () => {
+  const today = createPlannedPlan({
+    id: 'today-plan', description: 'Today', amount: 10, type: 'expense', tags: [], date: '2026-09-30',
+    frequency: Frequency.ONE_TIME, createdAt: 1, lastModified: 2,
+  });
+  const editedActual = createPlannedPlan({
+    id: 'edited-plan', description: 'Edited actual', amount: 10, type: 'expense', tags: [], date: '2026-09-30',
+    frequency: Frequency.ONE_TIME, createdAt: 1, lastModified: 2,
+  });
+  assert.equal(today.startDate, '2026-09-30');
+  assert.equal(editedActual.startDate, '2026-09-30');
+  assert.deepEqual(getPlanOccurrencesInRange(today, '2026-09-29', '2026-10-01'), ['2026-09-30']);
+  for (const date of ['2026-09-29', '2026-10-01']) {
+    const boundaryPlan = createPlannedPlan({ id: date, description: 'Boundary', amount: 1, type: 'expense', tags: [], date, frequency: Frequency.ONE_TIME, createdAt: 1, lastModified: 2 });
+    assert.deepEqual(getPlanOccurrencesInRange(boundaryPlan, date, date), [date]);
+  }
+});
+
+test('approximate Max belongs only to planned expenses and is removed when Planned is disabled', () => {
+  assert.equal(getPlannedApproximateAmount(false, 'expense', 70), undefined, 'actual expense drops legacy Max');
+  assert.equal(getPlannedApproximateAmount(true, 'expense', 70), 70, 'planned expense retains Max');
+  assert.equal(getPlannedApproximateAmount(true, 'income', 70), undefined, 'planned income does not receive an expense range');
+  const actual = createExactTransactionFromPlan({ id: 'actual', date: '2026-09-30', description: 'Actual', amount: 63.4, type: 'expense', tags: [], createdAt: 1, lastModified: 2 });
+  assert.equal(actual.amount, 63.4);
+  assert.equal(Object.hasOwn(actual, 'approximateUpperAmount'), false);
+});
+
+test('planned approximate ranges remain editable and actual-to-planned conversion preserves the date and range', () => {
+  const edited = createPlannedPlan({
+    id: 'edited', description: 'Edited', amount: 50, approximateUpperAmount: 70, type: 'expense', tags: [],
+    date: '2026-09-30', frequency: Frequency.ONE_TIME, createdAt: 1, lastModified: 2,
+  });
+  assert.equal(edited.amount, 50);
+  assert.equal(edited.approximateUpperAmount, 70);
+  assert.equal(edited.startDate, '2026-09-30');
+});
+
+test('applying an exact plan keeps its direct amount and applying an approximate plan requires one exact amount', () => {
+  const exact = createAppliedTransaction(rangedPlan({ approximateUpperAmount: undefined }), '2026-09-30', false, 3);
+  assert.equal(exact.amount, 40);
+  const approximate = createAppliedTransaction(rangedPlan(), '2026-09-30', false, 3, 3, 63.4);
+  assert.equal(approximate.amount, 63.4);
+  assert.equal(Object.hasOwn(approximate, 'approximateUpperAmount'), false);
+  assert.equal(approximate.isPaid, false, 'application preserves the existing unpaid/materialized transaction behavior');
+  const exactProjection = getApproximateUnpaidExpenseOccurrences([{ ...approximate, relatedPlanId: 'ranged-plan' }], '2026-09-01', '2026-09-30');
+  assert.deepEqual(exactProjection, [{ amount: 63.4, type: 'expense', approximateUpperAmount: undefined }]);
+  assert.deepEqual(calculateProjectedBalance(100, exactProjection), {
+    projectedBalance: 36.6, projectedBalanceMin: 36.6, projectedBalanceMax: 36.6,
+  });
+  assert.equal(createAppliedTransaction(rangedPlan(), '2026-09-30', true, 3, 3, 74.25).amount, 74.25, 'actual may fall outside its estimate');
+  assert.throws(() => createAppliedTransaction(rangedPlan(), '2026-09-30', false, 3, 3, -1));
+});
+
+test('applying a recurring approximate occurrence leaves the plan and future occurrence ranges intact', () => {
+  const originalPlan = rangedPlan();
+  const firstDate = getPlanOccurrencesInRange(originalPlan, '2026-09-29', '2026-09-29')[0];
+  const actual = createAppliedTransaction(originalPlan, firstDate, false, 3, 3, 47.3);
+  const nextPlan = { ...originalPlan, occurrencesGenerated: originalPlan.occurrencesGenerated + 1 };
+  assert.equal(actual.amount, 47.3);
+  assert.equal(Object.hasOwn(actual, 'approximateUpperAmount'), false);
+  assert.equal(originalPlan.approximateUpperAmount, 50);
+  assert.equal(nextPlan.approximateUpperAmount, 50);
+  assert.deepEqual(getPlanOccurrencesInRange(nextPlan, '2026-09-29', '2026-10-06'), ['2026-10-06']);
+});
+
+test('unapplied approximate recurring occurrences keep their projected expense range', () => {
+  const plan = rangedPlan();
+  const occurrences = getPlanOccurrencesInRange(plan, '2026-09-29', '2026-10-13')
+    .map(() => ({ amount: plan.amount, approximateUpperAmount: plan.approximateUpperAmount, type: plan.type }));
+  assert.equal(occurrences.length, 3);
+  assert.deepEqual(calculateProjectedBalance(1000, occurrences), {
+    projectedBalance: 880, projectedBalanceMin: 850, projectedBalanceMax: 880,
+  });
 });
 
 const plan = (frequency, startDate, overrides = {}) => ({
