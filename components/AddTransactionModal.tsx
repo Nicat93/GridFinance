@@ -45,7 +45,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   const [planStartDate, setPlanStartDate] = useState(''); 
 
   // Calculator State
-  const [calcTarget, setCalcTarget] = useState<'amount' | 'maxOccurrences' | null>(null);
+  const [calcTarget, setCalcTarget] = useState<'amount' | 'approximateUpperAmount' | 'maxOccurrences' | null>(null);
 
   // Tag Dropdown State
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
@@ -174,6 +174,9 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   const handleCalculatorApply = (val: string) => {
       if (calcTarget === 'amount') {
           setAmount(val);
+      } else if (calcTarget === 'approximateUpperAmount') {
+          setApproximateUpperAmount(val);
+          setAmountError('');
       } else if (calcTarget === 'maxOccurrences') {
           if (parseFloat(val) === 0 || val === '') {
               setMaxOccurrences('');
@@ -273,16 +276,24 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                     {amount ? amount : '0.00'}
                 </div>
 
-                {type === 'expense' && <input
-                    type="text"
-                    inputMode="decimal"
-                    value={approximateUpperAmount}
-                    onChange={e => { setApproximateUpperAmount(e.target.value); setAmountError(''); }}
-                    placeholder={t.approxMax}
-                    aria-label={`${t.amount} ${t.approxMax}`}
-                    title={`${t.amount} ${t.approxMax}`}
-                    className={`w-[4.5rem] sm:w-20 shrink-0 bg-gray-100 dark:bg-gray-900 border ${amountError ? 'border-rose-500' : 'border-gray-200 dark:border-gray-800'} text-gray-900 dark:text-white px-2 py-2 rounded text-sm sm:text-base font-mono focus:outline-none focus:border-indigo-500 placeholder:text-gray-400`}
-                />}
+                {type === 'expense' && <div className={`w-[4.5rem] sm:w-20 shrink-0 flex bg-gray-100 dark:bg-gray-900 border ${amountError ? 'border-rose-500' : 'border-gray-200 dark:border-gray-800'} rounded`}>
+                    <button
+                        type="button"
+                        onClick={() => setCalcTarget('approximateUpperAmount')}
+                        aria-label={`${t.approxMax} ${approximateUpperAmount}`}
+                        title={`${t.amount} ${t.approxMax}`}
+                        className={`min-w-0 flex-1 px-2 py-2 text-left text-sm sm:text-base font-mono text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500 placeholder:text-gray-400 ${!approximateUpperAmount ? 'text-gray-400' : ''}`}
+                    >
+                        {approximateUpperAmount || t.approxMax}
+                    </button>
+                    {approximateUpperAmount !== '' && <button
+                        type="button"
+                        onClick={() => { setApproximateUpperAmount(''); setAmountError(''); }}
+                        aria-label={`Clear ${t.approxMax}`}
+                        title={`Clear ${t.approxMax}`}
+                        className="px-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                    >×</button>}
+                </div>}
 
                 <div className="flex bg-gray-100 dark:bg-gray-900 rounded p-1 border border-gray-200 dark:border-gray-800 shrink-0">
                     <button 
@@ -483,7 +494,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
 
         <CalculatorSheet 
             isOpen={calcTarget !== null} 
-            initialValue={calcTarget === 'amount' ? amount : maxOccurrences}
+            initialValue={calcTarget === 'amount' ? amount : calcTarget === 'approximateUpperAmount' ? approximateUpperAmount : maxOccurrences}
             onClose={() => setCalcTarget(null)} 
             onApply={handleCalculatorApply} 
         />
