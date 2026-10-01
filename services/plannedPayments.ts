@@ -48,7 +48,7 @@ export const createExactTransactionFromPlan = (
 export const createAppliedTransaction = (
   plan: RecurringPlan,
   date: string,
-  isPaid: boolean,
+  isPaid = true,
   createdAt: number,
   lastModified: number,
   actualAmount = plan.amount,

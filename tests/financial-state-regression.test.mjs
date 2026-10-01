@@ -25,7 +25,7 @@ const loadTypeScript = (relativePath) => {
 const { Frequency } = loadTypeScript('types.ts');
 const dates = loadTypeScript('services/dateOnly.ts');
 const { validateBackup } = loadTypeScript('services/backupValidation.ts');
-const { affectsCurrentBalance, getPaidVisualState } = loadTypeScript('services/financialState.ts');
+const { affectsCurrentBalance, calculateCurrentBalance, getPaidVisualState } = loadTypeScript('services/financialState.ts');
 const { getPlanOccurrencesInRange } = loadTypeScript('services/recurrence.ts');
 const { calculateProjectedBalance, getApproximateUnpaidExpenseOccurrences } = loadTypeScript('services/projectedBalance.ts');
 const { createAppliedTransaction, createExactTransactionFromPlan, createPlannedPlan, getPlannedApproximateAmount } = loadTypeScript('services/plannedPayments.ts');
@@ -33,11 +33,13 @@ const transaction = (date, isPaid, type = 'expense', amount = 10) => ({ id: `${d
 
 test('Current balance eligibility follows payment state for past, today, and future dates', () => {
   const checks = [
-    ['2026-09-28', true, true], ['2026-09-29', true, true],
-    ['2026-09-28', false, false], ['2026-09-29', false, false],
+    ['2026-09-30', true, true], ['2026-10-01', true, true], ['2026-10-15', true, true],
+    ['2026-09-30', false, false], ['2026-10-01', false, false],
     ['2026-10-15', false, false], ['2026-10-15', true, true],
   ];
   for (const [date, paid, expected] of checks) assert.equal(affectsCurrentBalance(transaction(date, paid)), expected);
+  assert.equal(calculateCurrentBalance([transaction('2026-10-15', true, 'expense', 10)]), -10, 'a paid future transaction affects Current immediately');
+  assert.equal(transaction('2026-10-15', true).date, '2026-10-15', 'paid early does not shift the scheduled date');
 });
 
 test('paid-early visual state changes to normal paid on the scheduled date without changing the date', () => {
@@ -156,15 +158,60 @@ test('applying an exact plan keeps its direct amount and applying an approximate
   assert.throws(() => createAppliedTransaction(rangedPlan(), '2026-09-30', false, 3, 3, -1));
 });
 
+test('applying an approximate planned payment records its exact amount as paid for Current', () => {
+  const actual = createAppliedTransaction(rangedPlan(), '2026-09-30', undefined, 3, 3, 63.4);
+  assert.equal(actual.amount, 63.4);
+  assert.equal(affectsCurrentBalance(actual), true);
+  assert.equal(calculateCurrentBalance([{ ...actual, id: 'income', type: 'income', amount: 1000 } , actual]), 936.6);
+  assert.equal(Object.hasOwn(actual, 'approximateUpperAmount'), false);
+});
+
+test('Current recalculates from paid actual adds, edits, deletes, and conversions', () => {
+  const income = { id: 'income', date: '2026-09-30', description: 'Salary', amount: 1000, type: 'income', tags: [], isPaid: true, createdAt: 1 };
+  const expense = { id: 'expense', date: '2026-09-30', description: 'Bill', amount: 100, type: 'expense', tags: [], isPaid: true, createdAt: 2 };
+  let transactions = [income, expense];
+  let plans = [];
+  assert.equal(calculateCurrentBalance(transactions), 900, 'adding an actual expense immediately lowers Current');
+  assert.equal(calculateCurrentBalance([income, expense, { ...income, id: 'extra-income', amount: 50 }]), 950, 'adding income immediately raises Current');
+  transactions = transactions.map(item => item.id === 'expense' ? { ...item, amount: 150 } : item);
+  assert.equal(calculateCurrentBalance(transactions), 850, 'editing the actual expense amount immediately updates Current');
+  transactions = transactions.filter(item => item.id !== expense.id);
+  assert.equal(calculateCurrentBalance(transactions), 1000, 'deleting an actual transaction immediately removes its effect');
+  const convertible = { ...expense, id: 'convertible', amount: 100 };
+  transactions = [...transactions, convertible];
+  assert.equal(calculateCurrentBalance(transactions), 900);
+  const planned = createPlannedPlan({ id: 'plan-expense', description: convertible.description, amount: convertible.amount, type: convertible.type, tags: [], date: convertible.date, frequency: Frequency.ONE_TIME, createdAt: convertible.createdAt, lastModified: 3 });
+  transactions = transactions.filter(item => item.id !== convertible.id);
+  plans = [...plans, planned];
+  assert.equal(calculateCurrentBalance(transactions), 1000, 'Actual → Planned removes the expense effect');
+  assert.equal(transactions.some(item => item.id === convertible.id), false);
+  assert.equal(plans.length, 1);
+  const actualAgain = createExactTransactionFromPlan({ id: 'converted-actual', date: planned.startDate, description: planned.description, amount: planned.amount, type: planned.type, tags: planned.tags, createdAt: planned.createdAt, lastModified: 4 });
+  plans = plans.filter(item => item.id !== planned.id);
+  transactions = [...transactions, actualAgain];
+  assert.equal(calculateCurrentBalance(transactions), 900, 'Planned → actual immediately adds the expense effect');
+  assert.equal(plans.length, 0);
+  assert.equal(transactions.filter(item => item.id === actualAgain.id).length, 1);
+  transactions = transactions.filter(item => item.id !== actualAgain.id);
+  assert.equal(calculateCurrentBalance(transactions), 1000, 'deleting an actual transaction immediately removes its effect');
+});
+
 test('applying a recurring approximate occurrence leaves the plan and future occurrence ranges intact', () => {
   const originalPlan = rangedPlan();
   const firstDate = getPlanOccurrencesInRange(originalPlan, '2026-09-29', '2026-09-29')[0];
   const actual = createAppliedTransaction(originalPlan, firstDate, false, 3, 3, 47.3);
+  const paidActual = createAppliedTransaction(originalPlan, firstDate, undefined, 4, 4, 47.3);
   const nextPlan = { ...originalPlan, occurrencesGenerated: originalPlan.occurrencesGenerated + 1 };
   assert.equal(actual.amount, 47.3);
   assert.equal(Object.hasOwn(actual, 'approximateUpperAmount'), false);
   assert.equal(originalPlan.approximateUpperAmount, 50);
   assert.equal(nextPlan.approximateUpperAmount, 50);
+  assert.equal(paidActual.isPaid, true);
+  assert.equal(paidActual.date, firstDate);
+  assert.equal(paidActual.amount, 47.3);
+  assert.equal(Object.hasOwn(paidActual, 'approximateUpperAmount'), false);
+  assert.equal(calculateCurrentBalance([{ id: 'salary', type: 'income', amount: 1000, isPaid: true }, paidActual]), 952.7);
+  assert.deepEqual(getApproximateUnpaidExpenseOccurrences([paidActual], '2026-09-01', '2026-09-30'), [], 'the paid exact occurrence is not added to Projected a second time');
   assert.deepEqual(getPlanOccurrencesInRange(nextPlan, '2026-09-29', '2026-10-06'), ['2026-10-06']);
 });
 

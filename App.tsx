@@ -22,7 +22,7 @@ import { APP_VERSION } from './version';
 import { translations } from './translations';
 import { validateBackup } from './services/backupValidation';
 import { addDateOnly, calculateBillingPeriod, dateOnlyToLocalDate, formatDateOnly, isDateOnlyAfter, todayDateOnly } from './services/dateOnly';
-import { affectsCurrentBalance } from './services/financialState';
+import { calculateCurrentBalance } from './services/financialState';
 import { calculateProjectedBalance, getApproximateUnpaidExpenseOccurrences } from './services/projectedBalance';
 import { LogicalClock, mergeLocalSnapshots, persistMergedSnapshot, readLocalSnapshot } from './services/localState';
 import { evaluateArithmetic } from './services/safeArithmetic';
@@ -176,7 +176,7 @@ export default function App() {
       pillRadius: 4
   });
 
-  const [shiftCycleDialog, setShiftCycleDialog] = useState<{ isOpen: boolean, planId: string, newDate: Date, actualAmount?: number } | null>(null);
+  const [shiftCycleDialog, setShiftCycleDialog] = useState<{ isOpen: boolean, planId: string, newDate: Date, isPaid: boolean, actualAmount?: number } | null>(null);
   const [pendingActualAmount, setPendingActualAmount] = useState<{ planId: string, date: Date, isPaid: boolean, fromTransition?: boolean } | null>(null);
   const [transitionState, setTransitionState] = useState<{ isOpen: boolean, targetDate: Date, pendingItems: { plan: RecurringPlan, due: Date }[] } | null>(null);
   const [isClearDataConfirmOpen, setIsClearDataConfirmOpen] = useState(false);
@@ -508,7 +508,7 @@ export default function App() {
   }, [syncConfig.enabled, triggerSync]);
 
   const snapshot: FinancialSnapshot = useMemo(() => {
-    const currentBalance = transactions.reduce((acc, t) => !affectsCurrentBalance(t) ? acc : t.type === 'income' ? acc + t.amount : acc - t.amount, 0);
+    const currentBalance = calculateCurrentBalance(transactions);
     const { start: periodStart, end: periodEnd } = calculateBillingPeriod(viewDate, cycleStartDay);
     const periodStartDate = formatDateOnly(periodStart);
     const periodEndDate = formatDateOnly(periodEnd);
@@ -892,7 +892,7 @@ export default function App() {
     }
   };
 
-  const executePlanApplication = (planId: string, applyDate: Date, isPaid = false, actualAmount?: number) => {
+  const executePlanApplication = (planId: string, applyDate: Date, isPaid = true, actualAmount?: number) => {
     const plan = plans.find(p => p.id === planId);
     if (!plan) return;
     const now = nextLogicalTime();
@@ -994,18 +994,18 @@ export default function App() {
       }
   };
 
-  const requestPlanApplication = (planId: string, newDate: Date, isPaid = false, actualAmount?: number) => {
+  const requestPlanApplication = (planId: string, newDate: Date, isPaid = true, actualAmount?: number) => {
     const plan = plans.find(p => p.id === planId);
     if (!plan) return;
     const currentPeriodEnd = new Date(snapshot.periodEnd); currentPeriodEnd.setHours(23, 59, 59, 999);
     const nextPeriodEnd = calculateBillingPeriod(new Date(snapshot.periodEnd.getFullYear(), snapshot.periodEnd.getMonth() + 1, 1), cycleStartDay).end;
 
     if (newDate > nextPeriodEnd) { alert(`Too far: ${newDate.toLocaleDateString()}`); return; }
-    if (newDate > currentPeriodEnd) { setShiftCycleDialog({ isOpen: true, planId, newDate, actualAmount }); }
-    else { executePlanApplication(planId, newDate, false, actualAmount); }
+    if (newDate > currentPeriodEnd) { setShiftCycleDialog({ isOpen: true, planId, newDate, isPaid, actualAmount }); }
+    else { executePlanApplication(planId, newDate, isPaid, actualAmount); }
   };
 
-  const beginPlanApplication = (planId: string, date: Date, isPaid = false) => {
+  const beginPlanApplication = (planId: string, date: Date, isPaid = true) => {
     const plan = plans.find(p => p.id === planId);
     if (!plan) return;
     if (plan.approximateUpperAmount !== undefined && plan.type === 'expense') {
@@ -1025,8 +1025,8 @@ export default function App() {
       }
       const pending = pendingActualAmount;
       setPendingActualAmount(null);
-      if (pending.isPaid) executePlanApplication(pending.planId, pending.date, true, actualAmount);
-      else requestPlanApplication(pending.planId, pending.date, false, actualAmount);
+      if (pending.fromTransition) executePlanApplication(pending.planId, pending.date, pending.isPaid, actualAmount);
+      else requestPlanApplication(pending.planId, pending.date, pending.isPaid, actualAmount);
       if (pending.fromTransition) setTransitionState(prev => prev ? { ...prev, pendingItems: prev.pendingItems.filter(item => item.plan.id !== pending.planId) } : null);
       return true;
     } catch {
@@ -1062,8 +1062,8 @@ export default function App() {
       setPlans(prev => prev.filter(p => p.id !== id));
   };
 
-  const handleConfirmShiftCycle = () => { if (shiftCycleDialog) { setLocalCycleStartDay(shiftCycleDialog.newDate.getDate()); setViewDate(shiftCycleDialog.newDate); executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate, false, shiftCycleDialog.actualAmount); setShiftCycleDialog(null); } };
-  const handleAlternativeKeepCycle = () => { if (shiftCycleDialog) { executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate, false, shiftCycleDialog.actualAmount); setShiftCycleDialog(null); } };
+  const handleConfirmShiftCycle = () => { if (shiftCycleDialog) { setLocalCycleStartDay(shiftCycleDialog.newDate.getDate()); setViewDate(shiftCycleDialog.newDate); executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate, shiftCycleDialog.isPaid, shiftCycleDialog.actualAmount); setShiftCycleDialog(null); } };
+  const handleAlternativeKeepCycle = () => { if (shiftCycleDialog) { executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate, shiftCycleDialog.isPaid, shiftCycleDialog.actualAmount); setShiftCycleDialog(null); } };
 
   // Translations helper
   const t = translations[language];
