@@ -300,9 +300,46 @@ test('same transaction and plan ID remain independent under an entity deletion',
 
 test('sync triggers during an active run coalesce to one non-overlapping follow-up', () => {
   const appSource = readFileSync(path.resolve('App.tsx'), 'utf8');
-  assert.match(appSource, /if \(isSyncingRef\.current\) \{ syncPendingRef\.current = true; return; \}/);
-  assert.match(appSource, /const rerun = shouldResync \|\| syncPendingRef\.current;\s*syncPendingRef\.current = false;\s*if \(rerun\) window\.setTimeout\(\(\) => triggerSync\(\), 0\);/);
-  assert.equal((appSource.match(/syncPendingRef\.current = true/g) || []).length, 1);
+  assert.match(appSource, /if \(isSyncingRef\.current\) return;/);
+  assert.match(appSource, /syncWorkTrackerRef\.current\.needsFollowUp\(runSucceeded, syncForcePendingRef\.current, shouldResync\)/);
+  assert.match(appSource, /if \(rerun\) window\.setTimeout\(\(\) => triggerSync\(\), 0\);/);
+  assert.match(appSource, /triggerSync\(\{ localMutation: true \}\)/);
+  assert.match(appSource, /syncGeneratedFingerprintRef\.current === fingerprint/);
+});
+
+test('one empty sync costs four pull requests and one changed transaction adds one upsert', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  try {
+    globalThis.fetch = async (input, init) => {
+      const auth = authenticatedResponse(input);
+      if (auth) return auth;
+      const request = input instanceof Request ? input : new Request(input, init);
+      const url = new URL(request.url);
+      requests.push({ method: request.method, table: url.pathname.split('/').pop() });
+      const body = url.pathname.endsWith('/grid_metadata') && request.method === 'GET'
+        ? JSON.stringify({ cycle_start_day: 1, updated_at: 0 })
+        : '[]';
+      return new Response(body, { status: request.method === 'GET' ? 200 : 201, headers: { 'content-type': 'application/json' } });
+    };
+    service.initSupabase(config.supabaseUrl, config.supabaseKey, config.syncId);
+    const pull = await service.pullChanges(config, 100);
+    assert.equal(pull.success, true);
+    const emptyPush = await service.pushChanges(config, [], [], [], {}, 1, 100);
+    assert.equal(emptyPush.success, true);
+    assert.equal(requests.length, 4);
+    assert.deepEqual(requests.map(request => request.table), [
+      'grid_transactions', 'grid_plans', 'grid_categories', 'grid_metadata',
+    ]);
+
+    requests.length = 0;
+    const changedPush = await service.pushChanges(config, [{ id: 'one', lastModified: 101 }], [], [], {}, 1, 100);
+    assert.equal(changedPush.success, true);
+    assert.deepEqual(requests, [{ method: 'POST', table: 'grid_transactions' }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    service.initSupabase('', '');
+  }
 });
 
 test('clearSyncData tombstones only rows in the configured sync partition and resets metadata', async () => {

@@ -27,6 +27,7 @@ import { calculateProjectedBalance, getApproximateUnpaidExpenseOccurrences } fro
 import { LogicalClock, mergeLocalSnapshots, persistMergedSnapshot, readLocalSnapshot } from './services/localState';
 import { evaluateArithmetic } from './services/safeArithmetic';
 import { createAppliedTransaction, createExactTransactionFromPlan, createPlannedPlan } from './services/plannedPayments';
+import { SyncWorkTracker } from './services/syncWorkTracker';
 
 // --- Utility Functions ---
 
@@ -185,9 +186,10 @@ export default function App() {
 
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('offline');
   const [syncStats, setSyncStats] = useState<{ up: number, down: number } | null>(null);
-  const syncTimeoutRef = useRef<number | null>(null);
   const isSyncingRef = useRef(false);
-  const syncPendingRef = useRef(false);
+  const syncWorkTrackerRef = useRef(new SyncWorkTracker());
+  const syncForcePendingRef = useRef(false);
+  const syncGeneratedFingerprintRef = useRef<string | null>(null);
   const isClearingDataRef = useRef(false);
   const clearDataSyncBlockedRef = useRef(false);
   const isFirstMount = useRef(true);
@@ -278,10 +280,12 @@ export default function App() {
       return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  const triggerSync = useCallback(async () => {
+  const triggerSync = useCallback(async (request: { localMutation?: boolean, force?: boolean } = {}) => {
+      if (request.localMutation) syncWorkTrackerRef.current.markLocalWork();
+      if (request.force && isSyncingRef.current) syncForcePendingRef.current = true;
       const currentConfig = stateRef.current.syncConfig;
       if (!currentConfig.enabled || !currentConfig.syncId) return;
-      if (isSyncingRef.current) { syncPendingRef.current = true; return; }
+      if (isSyncingRef.current) return;
       if (isClearingDataRef.current || clearDataSyncBlockedRef.current) return;
 
       // Check online status first to avoid "NetworkError" logs
@@ -291,6 +295,7 @@ export default function App() {
       }
 
       isSyncingRef.current = true;
+      syncWorkTrackerRef.current.beginRun();
       setSyncStatus('syncing');
       setSyncStats(null);
 
@@ -299,6 +304,7 @@ export default function App() {
 
       let downSize = 0;
       let upSize = 0;
+      let runSucceeded = false;
       let shouldResync = false;
 
       try {
@@ -378,6 +384,11 @@ export default function App() {
               mergedCycleDay !== latestLocalState.cycleStartDay;
 
           if (hasChanges) {
+              syncGeneratedFingerprintRef.current = JSON.stringify([
+                  mergedTransactions, mergedPlans, mergedCycleDay, merged.cycleStartDayLastModified,
+                  mergedDeletedIds, merged.transactionDeletedIds, merged.planDeletedIds,
+                  merged.deletedCategoryIds, merged.deletedCategoryNames, mergedCategories
+              ]);
               setTransactions(mergedTransactions);
               setPlans(mergedPlans);
               setCategoryDefs(mergedCategories);
@@ -434,7 +445,7 @@ export default function App() {
           }
 
           if (success) {
-            setSyncStatus('synced');
+            runSucceeded = true;
             // Keep changes stamped in the same millisecond as sync start
             // eligible for a follow-up push (push uses a strict > filter).
             const completedThrough = Math.max(lastSyncedAt, syncStartTime - 1);
@@ -452,8 +463,9 @@ export default function App() {
           setSyncStatus('error');
       } finally {
           isSyncingRef.current = false;
-          const rerun = shouldResync || syncPendingRef.current;
-          syncPendingRef.current = false;
+          const rerun = syncWorkTrackerRef.current.needsFollowUp(runSucceeded, syncForcePendingRef.current, shouldResync);
+          syncForcePendingRef.current = false;
+          if (runSucceeded && !rerun) setSyncStatus('synced');
           if (rerun) window.setTimeout(() => triggerSync(), 0);
       }
   }, []);
@@ -461,7 +473,7 @@ export default function App() {
   useEffect(() => {
       if (syncConfig.supabaseUrl && syncConfig.supabaseKey) {
           SupabaseService.initSupabase(syncConfig.supabaseUrl, syncConfig.supabaseKey, syncConfig.syncId);
-          if (syncConfig.enabled) triggerSync();
+          if (syncConfig.enabled) triggerSync({ force: true });
       } else {
           setSyncStatus('offline');
       }
@@ -470,19 +482,18 @@ export default function App() {
   useEffect(() => {
       if (isFirstMount.current) { isFirstMount.current = false; return; }
       if (!syncConfig.enabled) return;
-      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-
-      const attemptSync = () => {
-          if (navigator.onLine) {
-              triggerSync();
-          } else {
-              setSyncStatus('offline');
-          }
-      };
-
-      syncTimeoutRef.current = window.setTimeout(attemptSync, 3000);
-      return () => { if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current); }
-  }, [transactions, plans, cycleStartDay, deletedIds, transactionDeletedIds, planDeletedIds, deletedCategoryIds, deletedCategoryNames, categoryDefs, triggerSync, syncConfig.enabled]);
+      const fingerprint = JSON.stringify([
+          transactions, plans, cycleStartDay, cycleStartDayLastModified, deletedIds,
+          transactionDeletedIds, planDeletedIds, deletedCategoryIds, deletedCategoryNames, categoryDefs
+      ]);
+      if (syncGeneratedFingerprintRef.current === fingerprint) {
+          syncGeneratedFingerprintRef.current = null;
+          return;
+      }
+      syncGeneratedFingerprintRef.current = null;
+      if (navigator.onLine) triggerSync({ localMutation: true });
+      else setSyncStatus('offline');
+  }, [transactions, plans, cycleStartDay, cycleStartDayLastModified, deletedIds, transactionDeletedIds, planDeletedIds, deletedCategoryIds, deletedCategoryNames, categoryDefs, triggerSync, syncConfig.enabled]);
 
   useEffect(() => {
       const handleVisibilityChange = () => {
@@ -713,6 +724,12 @@ export default function App() {
                 imported = localRestore.backup as typeof imported;
             }
             const importedResetAt = nextLogicalTime();
+            syncGeneratedFingerprintRef.current = JSON.stringify([
+                imported.transactions, imported.plans, imported.cycleStartDay,
+                imported.cycleStartDayLastModified || 0, imported.deletedIds,
+                imported.transactionDeletedIds || {}, imported.planDeletedIds || {},
+                imported.deletedCategoryIds || {}, imported.deletedCategoryNames || {}, imported.categoryDefs || []
+            ]);
             setLocalResetAt(importedResetAt);
             setTransactions(imported.transactions);
             setPlans(imported.plans);
@@ -749,10 +766,7 @@ export default function App() {
     } finally {
         if (cloudImportLocked) {
             isSyncingRef.current = false;
-            if (syncPendingRef.current && importApplied) {
-                syncPendingRef.current = false;
-                window.setTimeout(() => triggerSync(), 0);
-            } else syncPendingRef.current = false;
+            if (importApplied) syncForcePendingRef.current = false;
         }
     }
   };
