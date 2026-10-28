@@ -26,7 +26,7 @@ import { calculateCurrentBalance } from './services/financialState';
 import { calculateProjectedBalance, getApproximateUnpaidExpenseOccurrences } from './services/projectedBalance';
 import { LogicalClock, mergeLocalSnapshots, persistMergedSnapshot, readLocalSnapshot } from './services/localState';
 import { evaluateArithmetic } from './services/safeArithmetic';
-import { createAppliedTransaction, createExactTransactionFromPlan, createPlannedPlan } from './services/plannedPayments';
+import { createAppliedTransaction, createExactTransactionFromPlan, createPlannedPlan, skipPlanOccurrence } from './services/plannedPayments';
 import { SyncWorkTracker } from './services/syncWorkTracker';
 
 // --- Utility Functions ---
@@ -1111,6 +1111,14 @@ export default function App() {
       setPlans(prev => prev.filter(p => p.id !== id));
   };
 
+  const handleSkipPlan = (planId: string) => {
+    const plan = plans.find(p => p.id === planId);
+    if (!plan || (plan.maxOccurrences && plan.occurrencesGenerated >= plan.maxOccurrences)) return;
+    const skipped = skipPlanOccurrence(plan, nextLogicalTime());
+    if (skipped.remove) deletePlan(planId);
+    else setPlans(prev => prev.map(p => p.id === planId ? skipped.plan : p));
+  };
+
   const handleConfirmShiftCycle = () => { if (shiftCycleDialog) { shiftCycleTo(shiftCycleDialog.newDate); setViewDate(shiftCycleDialog.newDate); executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate, shiftCycleDialog.isPaid, shiftCycleDialog.actualAmount); setShiftCycleDialog(null); } };
   const handleAlternativeKeepCycle = () => { if (shiftCycleDialog) { executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate, shiftCycleDialog.isPaid, shiftCycleDialog.actualAmount); setShiftCycleDialog(null); } };
 
@@ -1141,6 +1149,7 @@ export default function App() {
                     onDelete={deletePlan}
                     onEdit={(p) => { setEditingItem(p); setIsModalOpen(true); }}
                     onApplyNow={handleApplyPlanNow}
+                    onSkip={handleSkipPlan}
                     currentPeriodEnd={snapshot.periodEnd}
                     filterText={filterText}
                     sortOption={sortOption}

@@ -28,7 +28,7 @@ const { validateBackup } = loadTypeScript('services/backupValidation.ts');
 const { affectsCurrentBalance, calculateCurrentBalance, getPaidVisualState } = loadTypeScript('services/financialState.ts');
 const { getPlanOccurrencesInRange } = loadTypeScript('services/recurrence.ts');
 const { calculateProjectedBalance, getApproximateUnpaidExpenseOccurrences } = loadTypeScript('services/projectedBalance.ts');
-const { createAppliedTransaction, createExactTransactionFromPlan, createPlannedPlan, getPlannedApproximateAmount } = loadTypeScript('services/plannedPayments.ts');
+const { createAppliedTransaction, createExactTransactionFromPlan, createPlannedPlan, getPlannedApproximateAmount, skipPlanOccurrence } = loadTypeScript('services/plannedPayments.ts');
 const transaction = (date, isPaid, type = 'expense', amount = 10) => ({ id: `${date}-${isPaid}`, date, isPaid, type, amount });
 
 test('Current balance eligibility follows payment state for past, today, and future dates', () => {
@@ -244,4 +244,23 @@ test('occurrence projection preserves leap-day anchors, generated counts, limits
   const monthly = plan(Frequency.MONTHLY, '1900-01-31', { occurrencesGenerated: 1512, maxOccurrences: 1515, endDate: '2026-03-31' });
   assert.deepEqual(getPlanOccurrencesInRange(monthly, '2026-02-01', '2026-04-30'), ['2026-02-28', '2026-03-31']);
   assert.equal(dates.isDateOnlyAfter('2026-03-31', '2026-03-31'), false);
+});
+
+test('skipping a recurring occurrence advances the plan without a transaction, and a one-time plan is removed', () => {
+  const recurring = createPlannedPlan({
+    id: 'p1', description: 'Rent', amount: 600, type: 'expense', tags: ['Rent'], date: '2026-11-01',
+    frequency: Frequency.MONTHLY, maxOccurrences: 3, createdAt: 1, lastModified: 1,
+  });
+  const skipped = skipPlanOccurrence(recurring, 50);
+  assert.equal(skipped.remove, false);
+  assert.equal(skipped.plan.occurrencesGenerated, 1);
+  assert.equal(skipped.plan.lastModified, 50);
+  assert.equal(skipped.plan.startDate, '2026-11-01');
+  assert.equal(recurring.occurrencesGenerated, 0);
+
+  const oneTime = createPlannedPlan({
+    id: 'p2', description: 'Gift', amount: 40, type: 'expense', tags: [], date: '2026-11-05',
+    frequency: Frequency.ONE_TIME, createdAt: 1, lastModified: 1,
+  });
+  assert.deepEqual(skipPlanOccurrence(oneTime, 50), { remove: true });
 });

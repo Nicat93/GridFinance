@@ -8,6 +8,15 @@ export const getPlannedApproximateAmount = (
   approximateUpperAmount?: number,
 ): number | undefined => isPlanned && type === 'expense' ? approximateUpperAmount : undefined;
 
+/**
+ * Skipping drops the next occurrence without recording a transaction. A recurring plan moves on to its following
+ * occurrence; a one-time plan has nothing left to occur and is removed.
+ */
+export const skipPlanOccurrence = (plan: RecurringPlan, now: number): { remove: true } | { remove: false; plan: RecurringPlan } =>
+  plan.frequency === Frequency.ONE_TIME
+    ? { remove: true }
+    : { remove: false, plan: { ...plan, occurrencesGenerated: plan.occurrencesGenerated + 1, lastModified: now } };
+
 export const createPlannedPlan = (input: {
   id: string;
   description: string;

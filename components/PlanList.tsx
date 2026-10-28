@@ -12,6 +12,7 @@ interface Props {
   plans: RecurringPlan[];
   onDelete: (id: string) => void;
   onApplyNow: (planId: string) => void;
+  onSkip: (planId: string) => void;
   onEdit: (plan: RecurringPlan) => void;
   currentPeriodEnd: Date;
   filterText: string;
@@ -34,12 +35,13 @@ const addTimeLocal = (date: string | Date, freq: Frequency, count: number): Date
 
 // --- Component ---
 const PlanList: React.FC<Props> = ({ 
-    plans, onDelete, onApplyNow, onEdit, 
+    plans, onDelete, onApplyNow, onSkip, onEdit, 
     currentPeriodEnd, filterText, sortOption, designConfig, categories,
     startDate, endDate, language
 }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmSkipId, setConfirmSkipId] = useState<string | null>(null);
   const [renderLimit, setRenderLimit] = useState(PAGE_SIZE);
   const t = translations[language];
 
@@ -118,9 +120,12 @@ const PlanList: React.FC<Props> = ({
   const handleDeleteClick = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(id); };
   const handleConfirmDelete = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); onDelete(id); setConfirmDeleteId(null); };
   const handleCancelDelete = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(null); };
+  const handleSkipClick = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); setConfirmSkipId(id); };
+  const handleConfirmSkip = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); onSkip(id); setConfirmSkipId(null); };
+  const handleCancelSkip = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setConfirmSkipId(null); };
   const handleApply = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); onApplyNow(id); };
   const handleEdit = (e: React.MouseEvent, plan: RecurringPlan) => { e.preventDefault(); e.stopPropagation(); onEdit(plan); };
-  const toggleRow = (id: string) => { setExpandedId(prev => prev === id ? null : id); setConfirmDeleteId(null); };
+  const toggleRow = (id: string) => { setExpandedId(prev => prev === id ? null : id); setConfirmDeleteId(null); setConfirmSkipId(null); };
   const handleShowMore = () => setRenderLimit(prev => prev + PAGE_SIZE);
 
   const formatShortDate = (date: Date) => {
@@ -205,6 +210,7 @@ const PlanList: React.FC<Props> = ({
                     {visiblePlans.map(plan => {
                         const isExpanded = expandedId === plan.id;
                         const isDeleting = confirmDeleteId === plan.id;
+                        const isSkipping = confirmSkipId === plan.id;
                         const nextDate = addTimeLocal(plan.startDate, plan.frequency, plan.occurrencesGenerated);
                         nextDate.setHours(0,0,0,0);
                         const isFuture = nextDate >= today;
@@ -315,7 +321,13 @@ const PlanList: React.FC<Props> = ({
                                         )}
 
                                         <div className="flex gap-2 pt-1 border-t border-gray-200 dark:border-gray-800/50 mt-1 relative z-10">
-                                            {isDeleting ? (
+                                            {isSkipping ? (
+                                                <>
+                                                    <div className="flex-1 flex items-center justify-center text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wider text-[10px]">{t.skipPlan}?</div>
+                                                    <button onClick={(e) => handleConfirmSkip(e, plan.id)} className="bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-200 px-4 py-1.5 rounded text-[10px] sm:text-xs">{t.yes}</button>
+                                                    <button onClick={handleCancelSkip} className="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-1.5 rounded text-[10px] sm:text-xs">{t.no}</button>
+                                                </>
+                                            ) : isDeleting ? (
                                                 <>
                                                     <div className="flex-1 flex items-center justify-center text-red-500 dark:text-red-400 font-bold uppercase tracking-wider text-[10px]">{t.sure}</div>
                                                     <button onClick={(e) => handleConfirmDelete(e, plan.id)} className="bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-200 px-4 py-1.5 rounded text-[10px] sm:text-xs">{t.yes}</button>
@@ -324,6 +336,7 @@ const PlanList: React.FC<Props> = ({
                                             ) : (
                                                 <>
                                                     <button onClick={(e) => handleApply(e, plan.id)} disabled={!canApply} className={`flex-1 py-1.5 rounded text-[10px] sm:text-xs font-bold ${canApply ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/60' : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed'}`}>{isMaxed ? t.completed : t.applyNow}</button>
+                                                    <button onClick={(e) => handleSkipClick(e, plan.id)} disabled={isMaxed} className="px-4 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 py-1.5 rounded text-[10px] sm:text-xs font-bold hover:bg-amber-200 dark:hover:bg-amber-900/50 disabled:opacity-40 disabled:cursor-not-allowed">{t.skipPlan}</button>
                                                     <button onClick={(e) => handleEdit(e, plan)} className="px-4 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-1.5 rounded text-[10px] sm:text-xs hover:bg-gray-300 dark:hover:bg-gray-700">{t.edit}</button>
                                                     <button onClick={(e) => handleDeleteClick(e, plan.id)} className="px-4 bg-gray-200 dark:bg-gray-800 text-red-600 dark:text-red-400 py-1.5 rounded text-[10px] sm:text-xs hover:bg-red-100 dark:hover:bg-red-900/30">{t.del}</button>
                                                 </>
