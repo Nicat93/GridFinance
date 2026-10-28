@@ -25,3 +25,9 @@ export const getHistoryEmptyState = (
 ): HistoryEmptyState => transactionCount === 0 && !filterText.trim() && !startDate && !endDate
     ? 'empty'
     : 'noMatches';
+
+/** Horizontal swipe on the cycle bar: left shows the next cycle, right the previous one. */
+export const getCycleSwipeDirection = (dx: number, dy: number, threshold = 40): 'previous' | 'next' | null => {
+  if (Math.abs(dx) < threshold || Math.abs(dx) < Math.abs(dy) * 1.5) return null;
+  return dx < 0 ? 'next' : 'previous';
+};

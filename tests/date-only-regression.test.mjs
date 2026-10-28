@@ -89,3 +89,43 @@ test('date-only parsing and default dates use local calendar fields, not UTC ser
     else process.env.TZ = oldTz;
   }
 });
+
+test('a shifted cycle lasts one cycle, then regular cycles resume without overlaps', () => {
+  const day = (value) => dates.dateOnlyToLocalDate(value);
+  const range = (anchor, shift) => {
+    const { start, end } = dates.calculateShiftedBillingPeriod(day(anchor), 1, shift);
+    return `${dates.formatDateOnly(start)}..${dates.formatDateOnly(end)}`;
+  };
+
+  // Start day 1, cycle shifted to begin on Mar 3.
+  assert.equal(range('2026-03-10', '2026-03-03'), '2026-03-03..2026-03-31');
+  assert.equal(range('2026-03-03', '2026-03-03'), '2026-03-03..2026-03-31');
+  assert.equal(range('2026-03-31', '2026-03-03'), '2026-03-03..2026-03-31');
+  // Regular cycles resume afterwards, unaffected by the shift.
+  assert.equal(range('2026-04-01', '2026-03-03'), '2026-04-01..2026-04-30');
+  assert.equal(range('2026-05-15', '2026-03-03'), '2026-05-01..2026-05-31');
+  // The cycle before absorbs the cut-off days instead of leaving a stub.
+  assert.equal(range('2026-02-10', '2026-03-03'), '2026-02-01..2026-03-02');
+  assert.equal(range('2026-03-02', '2026-03-03'), '2026-02-01..2026-03-02');
+  assert.equal(range('2026-01-20', '2026-03-03'), '2026-01-01..2026-01-31');
+  // A shift onto a regular start, or an invalid value, changes nothing.
+  assert.equal(range('2026-03-10', '2026-03-01'), '2026-03-01..2026-03-31');
+  assert.equal(range('2026-03-10', 'not-a-date'), '2026-03-01..2026-03-31');
+  assert.equal(range('2026-03-10', null), '2026-03-01..2026-03-31');
+  assert.equal(dates.parseCycleShiftStart('2026-02-30'), null);
+  assert.equal(dates.parseCycleShiftStart('2026-03-03'), '2026-03-03');
+});
+
+test('swiping moves to the adjacent cycle, including across a shifted one', () => {
+  const day = (value) => dates.dateOnlyToLocalDate(value);
+  const shift = '2026-03-03';
+  const view = (anchor) => dates.calculateShiftedBillingPeriod(anchor, 1, shift);
+  let period = view(day('2026-03-10'));
+  const next = dates.calculateShiftedBillingPeriod(dates.adjacentPeriodAnchor(period, 'next'), 1, shift);
+  assert.equal(dates.formatDateOnly(next.start), '2026-04-01');
+  const previous = dates.calculateShiftedBillingPeriod(dates.adjacentPeriodAnchor(period, 'previous'), 1, shift);
+  assert.equal(`${dates.formatDateOnly(previous.start)}..${dates.formatDateOnly(previous.end)}`, '2026-02-01..2026-03-02');
+  period = previous;
+  const back = dates.calculateShiftedBillingPeriod(dates.adjacentPeriodAnchor(period, 'next'), 1, shift);
+  assert.equal(dates.formatDateOnly(back.start), '2026-03-03');
+});
