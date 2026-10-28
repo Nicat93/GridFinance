@@ -142,3 +142,16 @@ export const adjacentPeriodAnchor = (period: { start: Date; end: Date }, directi
   anchor.setDate(anchor.getDate() + (direction === 'next' ? 1 : -1));
   return anchor;
 };
+
+/** The cycle a person last looked at, remembered until the cycle that was current when it was saved ends. */
+export interface SavedCycleView { start: string; until: string }
+
+export const parseSavedCycleView = (value: unknown): SavedCycleView | null => {
+  if (!value || typeof value !== 'object') return null;
+  const { start, until } = value as Record<string, unknown>;
+  return isDateOnlyString(start) && isDateOnlyString(until) ? { start, until } : null;
+};
+
+/** A viewed cycle other than today's is worth remembering; viewing today's cycle clears the memory. */
+export const nextSavedCycleView = (viewedStart: string, currentPeriod: { start: Date; end: Date }): SavedCycleView | null =>
+  viewedStart === formatDateOnly(currentPeriod.start) ? null : { start: viewedStart, until: formatDateOnly(currentPeriod.end) };
