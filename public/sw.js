@@ -7,13 +7,25 @@
 
 
 
-const CACHE_NAME = 'grid-finance-v67';
+const CACHE_NAME = 'grid-finance-v68';
 const CORE_ASSETS = [
   './index.html',
   './manifest.json',
   './icon.svg',
   './assets/index.css',
-  './assets/index.js'
+  './assets/index.js',
+  './assets/inter-latin-400-normal.woff2',
+  './assets/inter-latin-500-normal.woff2',
+  './assets/inter-latin-700-normal.woff2',
+  './assets/inter-latin-ext-400-normal.woff2',
+  './assets/inter-latin-ext-500-normal.woff2',
+  './assets/inter-latin-ext-700-normal.woff2',
+  './assets/jetbrains-mono-latin-400-normal.woff2',
+  './assets/jetbrains-mono-latin-500-normal.woff2',
+  './assets/jetbrains-mono-latin-700-normal.woff2',
+  './assets/jetbrains-mono-latin-ext-400-normal.woff2',
+  './assets/jetbrains-mono-latin-ext-500-normal.woff2',
+  './assets/jetbrains-mono-latin-ext-700-normal.woff2'
 ];
 
 // Install Event: Cache assets
