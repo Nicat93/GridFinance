@@ -35,7 +35,7 @@ const addTimeLocal = (date: string | Date, freq: Frequency, count: number): Date
 
 // --- Component ---
 const PlanList: React.FC<Props> = ({ 
-    plans, onDelete, onApplyNow, onSkip, onEdit, 
+    plans, onDelete, onApplyNow, onSkip, onEdit,
     currentPeriodEnd, filterText, sortOption, designConfig, categories,
     startDate, endDate, language
 }) => {
