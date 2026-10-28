@@ -12,6 +12,7 @@ interface Props {
   plans: RecurringPlan[];
   onDelete: (id: string) => void;
   onApplyNow: (planId: string) => void;
+  onSkip: (planId: string) => void;
   onEdit: (plan: RecurringPlan) => void;
   currentPeriodEnd: Date;
   filterText: string;
@@ -34,7 +35,7 @@ const addTimeLocal = (date: string | Date, freq: Frequency, count: number): Date
 
 // --- Component ---
 const PlanList: React.FC<Props> = ({ 
-    plans, onDelete, onApplyNow, onEdit, 
+    plans, onDelete, onApplyNow, onSkip, onEdit,
     currentPeriodEnd, filterText, sortOption, designConfig, categories,
     startDate, endDate, language
 }) => {
@@ -118,6 +119,7 @@ const PlanList: React.FC<Props> = ({
   const handleDeleteClick = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(id); };
   const handleConfirmDelete = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); onDelete(id); setConfirmDeleteId(null); };
   const handleCancelDelete = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(null); };
+  const handleSkip = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); onSkip(id); };
   const handleApply = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); onApplyNow(id); };
   const handleEdit = (e: React.MouseEvent, plan: RecurringPlan) => { e.preventDefault(); e.stopPropagation(); onEdit(plan); };
   const toggleRow = (id: string) => { setExpandedId(prev => prev === id ? null : id); setConfirmDeleteId(null); };
@@ -324,6 +326,7 @@ const PlanList: React.FC<Props> = ({
                                             ) : (
                                                 <>
                                                     <button onClick={(e) => handleApply(e, plan.id)} disabled={!canApply} className={`flex-1 py-1.5 rounded text-[10px] sm:text-xs font-bold ${canApply ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/60' : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed'}`}>{isMaxed ? t.completed : t.applyNow}</button>
+                                                    <button onClick={(e) => handleSkip(e, plan.id)} disabled={isMaxed} className="px-4 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 py-1.5 rounded text-[10px] sm:text-xs font-bold hover:bg-amber-200 dark:hover:bg-amber-900/50 disabled:opacity-40 disabled:cursor-not-allowed">{t.skipPlan}</button>
                                                     <button onClick={(e) => handleEdit(e, plan)} className="px-4 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-1.5 rounded text-[10px] sm:text-xs hover:bg-gray-300 dark:hover:bg-gray-700">{t.edit}</button>
                                                     <button onClick={(e) => handleDeleteClick(e, plan.id)} className="px-4 bg-gray-200 dark:bg-gray-800 text-red-600 dark:text-red-400 py-1.5 rounded text-[10px] sm:text-xs hover:bg-red-100 dark:hover:bg-red-900/30">{t.del}</button>
                                                 </>

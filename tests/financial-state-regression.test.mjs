@@ -28,7 +28,7 @@ const { validateBackup } = loadTypeScript('services/backupValidation.ts');
 const { affectsCurrentBalance, calculateCurrentBalance, getPaidVisualState } = loadTypeScript('services/financialState.ts');
 const { getPlanOccurrencesInRange } = loadTypeScript('services/recurrence.ts');
 const { calculateProjectedBalance, getApproximateUnpaidExpenseOccurrences } = loadTypeScript('services/projectedBalance.ts');
-const { createAppliedTransaction, createExactTransactionFromPlan, createPlannedPlan, getPlannedApproximateAmount } = loadTypeScript('services/plannedPayments.ts');
+const { createAppliedTransaction, createExactTransactionFromPlan, createPlannedPlan, getPlannedApproximateAmount, createSkippedTransaction } = loadTypeScript('services/plannedPayments.ts');
 const transaction = (date, isPaid, type = 'expense', amount = 10) => ({ id: `${date}-${isPaid}`, date, isPaid, type, amount });
 
 test('Current balance eligibility follows payment state for past, today, and future dates', () => {
@@ -244,4 +244,22 @@ test('occurrence projection preserves leap-day anchors, generated counts, limits
   const monthly = plan(Frequency.MONTHLY, '1900-01-31', { occurrencesGenerated: 1512, maxOccurrences: 1515, endDate: '2026-03-31' });
   assert.deepEqual(getPlanOccurrencesInRange(monthly, '2026-02-01', '2026-04-30'), ['2026-02-28', '2026-03-31']);
   assert.equal(dates.isDateOnlyAfter('2026-03-31', '2026-03-31'), false);
+});
+
+test('skipping applies the occurrence as a paid zero-amount [skip] transaction with the normal occurrence ID', () => {
+  const plan = createPlannedPlan({
+    id: 'p1', description: 'Rent', amount: 600, type: 'expense', tags: ['Rent'], date: '2026-11-01',
+    frequency: Frequency.MONTHLY, approximateUpperAmount: 700, createdAt: 1, lastModified: 1,
+  });
+  const skipped = createSkippedTransaction(plan, '2026-11-01', 50);
+  const applied = createAppliedTransaction(plan, '2026-11-01', true, 50, 50, 600);
+  assert.equal(skipped.description, '[skip] Rent');
+  assert.equal(skipped.amount, 0);
+  assert.equal(skipped.isPaid, true);
+  assert.equal(skipped.type, 'expense');
+  assert.equal(skipped.relatedPlanId, 'p1');
+  assert.equal(skipped.date, '2026-11-01');
+  assert.equal(skipped.id, applied.id);
+  assert.equal('approximateUpperAmount' in skipped, false);
+  assert.deepEqual(skipped.tags, ['Rent']);
 });

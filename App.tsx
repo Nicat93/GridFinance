@@ -26,7 +26,7 @@ import { calculateCurrentBalance } from './services/financialState';
 import { calculateProjectedBalance, getApproximateUnpaidExpenseOccurrences } from './services/projectedBalance';
 import { LogicalClock, mergeLocalSnapshots, persistMergedSnapshot, readLocalSnapshot } from './services/localState';
 import { evaluateArithmetic } from './services/safeArithmetic';
-import { createAppliedTransaction, createExactTransactionFromPlan, createPlannedPlan } from './services/plannedPayments';
+import { createAppliedTransaction, createExactTransactionFromPlan, createPlannedPlan, createSkippedTransaction } from './services/plannedPayments';
 import { SyncWorkTracker } from './services/syncWorkTracker';
 
 // --- Utility Functions ---
@@ -939,13 +939,13 @@ export default function App() {
     }
   };
 
-  const executePlanApplication = (planId: string, applyDate: Date, isPaid = true, actualAmount?: number) => {
+  const executePlanApplication = (planId: string, applyDate: Date, isPaid = true, actualAmount?: number, asSkip = false) => {
     const plan = plans.find(p => p.id === planId);
     if (!plan) return;
     const now = nextLogicalTime();
     const dateStr = applyDate.getFullYear() + '-' + String(applyDate.getMonth() + 1).padStart(2, '0') + '-' + String(applyDate.getDate()).padStart(2, '0');
 
-    const newTx = createAppliedTransaction(plan, dateStr, isPaid, now, now, actualAmount);
+    const newTx = asSkip ? createSkippedTransaction(plan, dateStr, now) : createAppliedTransaction(plan, dateStr, isPaid, now, now, actualAmount);
     setTransactions(prev => [newTx, ...prev]);
 
     if (plan.frequency === Frequency.ONE_TIME) {
@@ -1111,6 +1111,13 @@ export default function App() {
       setPlans(prev => prev.filter(p => p.id !== id));
   };
 
+  const handleSkipPlan = (planId: string) => {
+    const plan = plans.find(p => p.id === planId);
+    if (!plan || (plan.maxOccurrences && plan.occurrencesGenerated >= plan.maxOccurrences)) return;
+    const dueDate = addTime(plan.startDate, plan.frequency, plan.occurrencesGenerated); dueDate.setHours(0,0,0,0);
+    executePlanApplication(planId, dueDate, true, undefined, true);
+  };
+
   const handleConfirmShiftCycle = () => { if (shiftCycleDialog) { shiftCycleTo(shiftCycleDialog.newDate); setViewDate(shiftCycleDialog.newDate); executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate, shiftCycleDialog.isPaid, shiftCycleDialog.actualAmount); setShiftCycleDialog(null); } };
   const handleAlternativeKeepCycle = () => { if (shiftCycleDialog) { executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate, shiftCycleDialog.isPaid, shiftCycleDialog.actualAmount); setShiftCycleDialog(null); } };
 
@@ -1141,6 +1148,7 @@ export default function App() {
                     onDelete={deletePlan}
                     onEdit={(p) => { setEditingItem(p); setIsModalOpen(true); }}
                     onApplyNow={handleApplyPlanNow}
+                    onSkip={handleSkipPlan}
                     currentPeriodEnd={snapshot.periodEnd}
                     filterText={filterText}
                     sortOption={sortOption}
