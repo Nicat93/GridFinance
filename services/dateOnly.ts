@@ -60,3 +60,85 @@ export const calculateBillingPeriod = (anchor: Date, startDay: number): { start:
   end.setHours(23, 59, 59, 999);
   return { start, end };
 };
+
+const isDateOnlyString = (value: unknown): value is string => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const { year, month, day } = parseDateOnly(value);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+};
+
+/** One shifted billing cycle, as inclusive YYYY-MM-DD dates. `end` is always the end of a regular cycle. */
+export interface CycleShift { start: string; end: string }
+
+/** A saved shift is only trusted when it holds two valid dates in order; anything else is ignored. */
+export const parseCycleShift = (value: unknown): CycleShift | null => {
+  if (!value || typeof value !== 'object') return null;
+  const { start, end } = value as Record<string, unknown>;
+  return isDateOnlyString(start) && isDateOnlyString(end) && start <= end ? { start, end } : null;
+};
+
+const dayBefore = (date: Date): Date => {
+  const previous = new Date(date);
+  previous.setDate(previous.getDate() - 1);
+  return previous;
+};
+
+/**
+ * Builds the shift for a chosen start date. A date inside the period being viewed begins the NEXT cycle early:
+ * it lasts until that next cycle's regular end. A date in a later cycle begins that cycle late. A date that is
+ * already a regular start needs no shift.
+ */
+export const createCycleShift = (
+  target: Date,
+  startDay: number,
+  viewedPeriod: { start: Date; end: Date },
+): CycleShift | null => {
+  const start = formatDateOnly(target);
+  if (start > formatDateOnly(viewedPeriod.start) && start <= formatDateOnly(viewedPeriod.end)) {
+    const afterViewed = new Date(viewedPeriod.end);
+    afterViewed.setDate(afterViewed.getDate() + 1);
+    return { start, end: formatDateOnly(calculateBillingPeriod(afterViewed, startDay).end) };
+  }
+  const regular = calculateBillingPeriod(target, startDay);
+  return formatDateOnly(regular.start) === start ? null : { start, end: formatDateOnly(regular.end) };
+};
+
+/**
+ * Billing period with an optional one-cycle shift. The shifted cycle is [start, end]; regular cycles resume the
+ * day after `end`. Days before the shift belong to the cycle that precedes the shifted regular cycle, which is
+ * ended the day before the shift starts, so periods never overlap and no short stub is left behind.
+ */
+export const calculateShiftedBillingPeriod = (
+  anchor: Date,
+  startDay: number,
+  shift?: CycleShift | null,
+): { start: Date; end: Date } => {
+  const regular = calculateBillingPeriod(anchor, startDay);
+  const valid = parseCycleShift(shift);
+  if (!valid) return regular;
+
+  const anchorValue = formatDateOnly(anchor);
+  if (anchorValue >= valid.start && anchorValue <= valid.end) {
+    return { start: dateOnlyToLocalDate(valid.start), end: dateOnlyToLocalDate(valid.end) };
+  }
+  if (anchorValue > valid.end) return regular;
+
+  const shifted = calculateBillingPeriod(dateOnlyToLocalDate(valid.end), startDay);
+  if (formatDateOnly(shifted.start) === valid.start) return regular;
+  const before = calculateBillingPeriod(dayBefore(shifted.start), startDay);
+  if (anchorValue >= formatDateOnly(before.start)) {
+    const end = dayBefore(dateOnlyToLocalDate(valid.start));
+    end.setHours(23, 59, 59, 999);
+    return { start: before.start, end };
+  }
+  return regular;
+};
+
+/** Anchor dates that land in the previous / next billing period, for swiping between cycles. */
+export const adjacentPeriodAnchor = (period: { start: Date; end: Date }, direction: 'previous' | 'next'): Date => {
+  const anchor = new Date(direction === 'next' ? period.end : period.start);
+  anchor.setHours(12, 0, 0, 0);
+  anchor.setDate(anchor.getDate() + (direction === 'next' ? 1 : -1));
+  return anchor;
+};

@@ -21,7 +21,7 @@ import { getPlanOccurrencesInRange } from './services/recurrence';
 import { APP_VERSION } from './version';
 import { translations } from './translations';
 import { validateBackup } from './services/backupValidation';
-import { addDateOnly, calculateBillingPeriod, dateOnlyToLocalDate, formatDateOnly, isDateOnlyAfter, todayDateOnly } from './services/dateOnly';
+import { type CycleShift, addDateOnly, adjacentPeriodAnchor, calculateShiftedBillingPeriod, dateOnlyToLocalDate, createCycleShift, parseCycleShift, formatDateOnly, isDateOnlyAfter, todayDateOnly } from './services/dateOnly';
 import { calculateCurrentBalance } from './services/financialState';
 import { calculateProjectedBalance, getApproximateUnpaidExpenseOccurrences } from './services/projectedBalance';
 import { LogicalClock, mergeLocalSnapshots, persistMergedSnapshot, readLocalSnapshot } from './services/localState';
@@ -146,6 +146,22 @@ export default function App() {
 
   const [viewDate, setViewDate] = useState<Date>(() => new Date());
   const [today, setToday] = useState(() => todayDateOnly());
+  // A shifted cycle is a one-cycle, device-local override of the configured start day; it is not synced.
+  const [cycleShift, setCycleShift] = useState<CycleShift | null>(() => {
+      try { return parseCycleShift(JSON.parse(localStorage.getItem('cycleShift') || 'null')); } catch { return null; }
+  });
+  useEffect(() => {
+      try {
+          if (cycleShift) localStorage.setItem('cycleShift', JSON.stringify(cycleShift));
+          else localStorage.removeItem('cycleShift');
+      } catch { /* storage unavailable: the shift only lasts for this session */ }
+  }, [cycleShift]);
+  useEffect(() => {
+      if (cycleShift && today > cycleShift.end) setCycleShift(null);
+  }, [cycleShift, today]);
+  const shiftCycleTo = (date: Date) => {
+      setCycleShift(createCycleShift(date, cycleStartDay, { start: snapshot.periodStart, end: snapshot.periodEnd }));
+  };
   useEffect(() => {
       const now = new Date();
       const untilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime();
@@ -520,7 +536,7 @@ export default function App() {
 
   const snapshot: FinancialSnapshot = useMemo(() => {
     const currentBalance = calculateCurrentBalance(transactions);
-    const { start: periodStart, end: periodEnd } = calculateBillingPeriod(viewDate, cycleStartDay);
+    const { start: periodStart, end: periodEnd } = calculateShiftedBillingPeriod(viewDate, cycleStartDay, cycleShift);
     const periodStartDate = formatDateOnly(periodStart);
     const periodEndDate = formatDateOnly(periodEnd);
 
@@ -546,7 +562,7 @@ export default function App() {
     });
 
     return { currentBalance, ...calculateProjectedBalance(currentBalance, projectedOccurrences), upcomingIncome, upcomingExpenses, upcomingExpensesMax, periodStart, periodEnd };
-  }, [transactions, plans, cycleStartDay, viewDate, today]);
+  }, [transactions, plans, cycleStartDay, cycleShift, viewDate, today]);
 
   const handleClearDataRequest = () => {
       setIsClearDataConfirmOpen(true);
@@ -598,6 +614,7 @@ export default function App() {
       setCategoryDefs([]); // Reset Categories too
       setLocalResetAt(nextLogicalTime());
       setLocalCycleStartDay(1);
+      setCycleShift(null);
       setSyncConfig(prev => ({ ...prev, lastSyncedAt: 0 }));
       setIsClearDataConfirmOpen(false);
       setClearDataError('');
@@ -734,6 +751,7 @@ export default function App() {
             setTransactions(imported.transactions);
             setPlans(imported.plans);
             setCycleStartDay(imported.cycleStartDay);
+            setCycleShift(null);
             setDeletedIds(imported.deletedIds);
             setTransactionDeletedIds(imported.transactionDeletedIds || {});
             setPlanDeletedIds(imported.planDeletedIds || {});
@@ -778,6 +796,7 @@ export default function App() {
         setPlans([]);
         setDeletedIds({});
         setLocalCycleStartDay(1);
+        setCycleShift(null);
     }
     setSyncConfig(newConfig);
   };
@@ -923,11 +942,13 @@ export default function App() {
     }
   };
 
+  const handleSwipeCycle = (direction: 'previous' | 'next') => {
+    setViewDate(adjacentPeriodAnchor({ start: snapshot.periodStart, end: snapshot.periodEnd }, direction));
+  };
+
   const handleUpdateBillingDate = (newDate: Date) => {
     const currentPeriod = snapshot;
-    const { start: newPeriodStart } = calculateBillingPeriod(newDate, newDate.getDate());
-
-    if (newPeriodStart > currentPeriod.periodStart) {
+    if (newDate > currentPeriod.periodStart) {
         const pending: { plan: RecurringPlan, due: Date }[] = [];
         const today = new Date(); today.setHours(0,0,0,0);
         plans.forEach(plan => {
@@ -947,7 +968,7 @@ export default function App() {
             return;
         }
     }
-    setLocalCycleStartDay(newDate.getDate());
+    shiftCycleTo(newDate);
     setViewDate(newDate);
   };
 
@@ -1002,7 +1023,7 @@ export default function App() {
 
   const handleFinishTransition = () => {
       if (transitionState) {
-          setLocalCycleStartDay(transitionState.targetDate.getDate());
+          shiftCycleTo(transitionState.targetDate);
           setViewDate(transitionState.targetDate);
           setTransitionState(null);
       }
@@ -1012,7 +1033,7 @@ export default function App() {
     const plan = plans.find(p => p.id === planId);
     if (!plan) return;
     const currentPeriodEnd = new Date(snapshot.periodEnd); currentPeriodEnd.setHours(23, 59, 59, 999);
-    const nextPeriodEnd = calculateBillingPeriod(new Date(snapshot.periodEnd.getFullYear(), snapshot.periodEnd.getMonth() + 1, 1), cycleStartDay).end;
+    const nextPeriodEnd = calculateShiftedBillingPeriod(adjacentPeriodAnchor({ start: snapshot.periodStart, end: snapshot.periodEnd }, 'next'), cycleStartDay, cycleShift).end;
 
     if (newDate > nextPeriodEnd) { alert(`Too far: ${newDate.toLocaleDateString()}`); return; }
     if (newDate > currentPeriodEnd) { setShiftCycleDialog({ isOpen: true, planId, newDate, isPaid, actualAmount }); }
@@ -1076,7 +1097,7 @@ export default function App() {
       setPlans(prev => prev.filter(p => p.id !== id));
   };
 
-  const handleConfirmShiftCycle = () => { if (shiftCycleDialog) { setLocalCycleStartDay(shiftCycleDialog.newDate.getDate()); setViewDate(shiftCycleDialog.newDate); executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate, shiftCycleDialog.isPaid, shiftCycleDialog.actualAmount); setShiftCycleDialog(null); } };
+  const handleConfirmShiftCycle = () => { if (shiftCycleDialog) { shiftCycleTo(shiftCycleDialog.newDate); setViewDate(shiftCycleDialog.newDate); executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate, shiftCycleDialog.isPaid, shiftCycleDialog.actualAmount); setShiftCycleDialog(null); } };
   const handleAlternativeKeepCycle = () => { if (shiftCycleDialog) { executePlanApplication(shiftCycleDialog.planId, shiftCycleDialog.newDate, shiftCycleDialog.isPaid, shiftCycleDialog.actualAmount); setShiftCycleDialog(null); } };
 
   // Translations helper
@@ -1084,7 +1105,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen pb-20 bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-300 font-sans transition-colors relative">
-      <SummaryBar snapshot={snapshot} onUpdateDate={handleUpdateBillingDate} syncStatus={syncStatus} language={language} />
+      <SummaryBar snapshot={snapshot} onUpdateDate={handleUpdateBillingDate} onSwipeCycle={handleSwipeCycle} syncStatus={syncStatus} language={language} />
 
       <main className="max-w-4xl mx-auto px-4">
         <FilterBar
@@ -1234,7 +1255,7 @@ export default function App() {
       />
 
       <ConfirmModal
-        isOpen={!!shiftCycleDialog} title={t.confirmTitle} message={`This payment (${shiftCycleDialog?.newDate.toLocaleDateString()}) falls in the next billing cycle. Shift cycle start to ${shiftCycleDialog?.newDate.getDate()}th?`}
+        isOpen={!!shiftCycleDialog} title={t.confirmTitle} message={`This payment (${shiftCycleDialog?.newDate.toLocaleDateString()}) falls in the next billing cycle. Start a shifted cycle on ${shiftCycleDialog?.newDate.toLocaleDateString()}? Regular cycles resume after it ends.`}
         onConfirm={handleConfirmShiftCycle} confirmText="Yes, Shift Cycle" onAlternative={handleAlternativeKeepCycle} alternativeText="No, Keep Current" onCancel={() => setShiftCycleDialog(null)} cancelText={t.cancel}
       />
       <ConfirmModal

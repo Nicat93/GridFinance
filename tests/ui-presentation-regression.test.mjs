@@ -28,7 +28,7 @@ const loadTypeScript = (relativePath) => {
   return loaded.exports;
 };
 
-const { formatMoney, formatTransactionAmount, getHistoryEmptyState } = loadTypeScript('services/presentation.ts');
+const { formatMoney, formatTransactionAmount, getHistoryEmptyState, getCycleSwipeDirection } = loadTypeScript('services/presentation.ts');
 const { handleExpandableRowKeyboardActivation } = loadTypeScript('services/keyboardAccessibility.ts');
 
 test('summary formatting preserves exact cents and large digits for normal and large balances', () => {
@@ -101,4 +101,11 @@ test('Max calculator is hidden for actual expenses and shown for planned expense
     initialData: { id: 'plan', description: 'Plan', amount: 50, approximateUpperAmount: 70, type: 'expense', frequency: 'One-time', startDate: '2026-09-30', occurrencesGenerated: 0, tags: [], createdAt: 1 },
   }));
   assert.match(plannedHtml, /aria-label="Max: not set" aria-haspopup="dialog"/);
+});
+
+test('cycle swipe needs a clear horizontal gesture: left is next, right is previous', () => {
+  assert.equal(getCycleSwipeDirection(-80, 5), 'next');
+  assert.equal(getCycleSwipeDirection(80, -10), 'previous');
+  assert.equal(getCycleSwipeDirection(-20, 0), null);
+  assert.equal(getCycleSwipeDirection(-60, 60), null);
 });

@@ -89,3 +89,57 @@ test('date-only parsing and default dates use local calendar fields, not UTC ser
     else process.env.TZ = oldTz;
   }
 });
+
+const day = (value) => dates.dateOnlyToLocalDate(value);
+const span = (period) => `${dates.formatDateOnly(period.start)}..${dates.formatDateOnly(period.end)}`;
+const viewed = (anchor, startDay = 1) => dates.calculateBillingPeriod(day(anchor), startDay);
+
+test('starting the next cycle early (Oct 28 -> November) lasts until November ends, then December starts on the 1st', () => {
+  const shift = dates.createCycleShift(day('2026-10-28'), 1, viewed('2026-10-28'));
+  assert.deepEqual(shift, { start: '2026-10-28', end: '2026-11-30' });
+  const at = (anchor) => span(dates.calculateShiftedBillingPeriod(day(anchor), 1, shift));
+  assert.equal(at('2026-10-28'), '2026-10-28..2026-11-30');
+  assert.equal(at('2026-11-15'), '2026-10-28..2026-11-30');
+  assert.equal(at('2026-11-30'), '2026-10-28..2026-11-30');
+  assert.equal(at('2026-12-01'), '2026-12-01..2026-12-31');
+  assert.equal(at('2027-01-20'), '2027-01-01..2027-01-31');
+  // October is cut short so periods do not overlap.
+  assert.equal(at('2026-10-27'), '2026-10-01..2026-10-27');
+  assert.equal(at('2026-10-05'), '2026-10-01..2026-10-27');
+  assert.equal(at('2026-09-10'), '2026-09-01..2026-09-30');
+});
+
+test('starting a later cycle late keeps the cycle before it whole, and regular cycles resume after', () => {
+  const shift = dates.createCycleShift(day('2026-03-03'), 1, viewed('2026-02-10'));
+  assert.deepEqual(shift, { start: '2026-03-03', end: '2026-03-31' });
+  const at = (anchor) => span(dates.calculateShiftedBillingPeriod(day(anchor), 1, shift));
+  assert.equal(at('2026-03-10'), '2026-03-03..2026-03-31');
+  assert.equal(at('2026-04-01'), '2026-04-01..2026-04-30');
+  assert.equal(at('2026-03-02'), '2026-02-01..2026-03-02');
+  assert.equal(at('2026-02-10'), '2026-02-01..2026-03-02');
+  assert.equal(at('2026-01-20'), '2026-01-01..2026-01-31');
+});
+
+test('shifts respect a non-default start day and ignore no-op or invalid input', () => {
+  // Start day 15, viewing Oct 15..Nov 14; start the next cycle early on Nov 10.
+  const shift = dates.createCycleShift(day('2026-11-10'), 15, viewed('2026-10-20', 15));
+  assert.deepEqual(shift, { start: '2026-11-10', end: '2026-12-14' });
+  assert.equal(span(dates.calculateShiftedBillingPeriod(day('2026-11-09'), 15, shift)), '2026-10-15..2026-11-09');
+  assert.equal(span(dates.calculateShiftedBillingPeriod(day('2026-12-15'), 15, shift)), '2026-12-15..2027-01-14');
+  // A regular start needs no shift; invalid saved values are ignored.
+  assert.equal(dates.createCycleShift(day('2026-12-01'), 1, viewed('2026-10-20')), null);
+  assert.equal(dates.parseCycleShift({ start: '2026-11-30', end: '2026-11-01' }), null);
+  assert.equal(dates.parseCycleShift({ start: '2026-02-30', end: '2026-03-31' }), null);
+  assert.equal(dates.parseCycleShift('2026-03-03'), null);
+  assert.equal(span(dates.calculateShiftedBillingPeriod(day('2026-03-10'), 1, null)), '2026-03-01..2026-03-31');
+});
+
+test('swiping moves to the adjacent cycle across an early-started cycle', () => {
+  const shift = { start: '2026-10-28', end: '2026-11-30' };
+  const view = (anchor) => dates.calculateShiftedBillingPeriod(anchor, 1, shift);
+  const current = view(day('2026-11-10'));
+  assert.equal(span(view(dates.adjacentPeriodAnchor(current, 'next'))), '2026-12-01..2026-12-31');
+  const previous = view(dates.adjacentPeriodAnchor(current, 'previous'));
+  assert.equal(span(previous), '2026-10-01..2026-10-27');
+  assert.equal(span(view(dates.adjacentPeriodAnchor(previous, 'next'))), '2026-10-28..2026-11-30');
+});

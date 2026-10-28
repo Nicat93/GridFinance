@@ -7,6 +7,8 @@ export const translations = {
   en: {
     current: 'Current',
     endPeriod: 'End Period',
+    previousCycle: 'Previous cycle',
+    nextCycle: 'Next cycle',
     inc: 'Inc',
     exp: 'Exp',
     history: 'History',
@@ -104,6 +106,8 @@ export const translations = {
   az: {
     current: 'Cari',
     endPeriod: 'Dövr Sonu',
+    previousCycle: 'Əvvəlki dövr',
+    nextCycle: 'Növbəti dövr',
     inc: 'Gəlir',
     exp: 'Xərc',
     history: 'Tarixçə',
@@ -201,6 +205,8 @@ export const translations = {
   ru: {
     current: 'Текущий',
     endPeriod: 'Конец пер.',
+    previousCycle: 'Предыдущий период',
+    nextCycle: 'Следующий период',
     inc: 'Дох',
     exp: 'Расх',
     history: 'История',
@@ -298,6 +304,8 @@ export const translations = {
   tr: {
     current: 'Mevcut',
     endPeriod: 'Dönem Sonu',
+    previousCycle: 'Önceki dönem',
+    nextCycle: 'Sonraki dönem',
     inc: 'Gelir',
     exp: 'Gider',
     history: 'Geçmiş',
