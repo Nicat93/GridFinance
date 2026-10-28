@@ -8,15 +8,6 @@ export const getPlannedApproximateAmount = (
   approximateUpperAmount?: number,
 ): number | undefined => isPlanned && type === 'expense' ? approximateUpperAmount : undefined;
 
-/**
- * Skipping drops the next occurrence without recording a transaction. A recurring plan moves on to its following
- * occurrence; a one-time plan has nothing left to occur and is removed.
- */
-export const skipPlanOccurrence = (plan: RecurringPlan, now: number): { remove: true } | { remove: false; plan: RecurringPlan } =>
-  plan.frequency === Frequency.ONE_TIME
-    ? { remove: true }
-    : { remove: false, plan: { ...plan, occurrencesGenerated: plan.occurrencesGenerated + 1, lastModified: now } };
-
 export const createPlannedPlan = (input: {
   id: string;
   description: string;
@@ -76,3 +67,15 @@ export const createAppliedTransaction = (
     lastModified,
   };
 };
+
+export const SKIP_DESCRIPTION_PREFIX = '[skip] ';
+
+/**
+ * Skipping applies the occurrence as a paid zero-amount transaction marked "[skip]". It keeps the occurrence's
+ * deterministic ID, so the plan advances exactly as for a normal apply, and deleting the transaction rolls the
+ * plan back like any applied one; editing it turns it into a real transaction.
+ */
+export const createSkippedTransaction = (plan: RecurringPlan, date: string, now: number): Transaction => ({
+  ...createAppliedTransaction(plan, date, true, now, now, 0),
+  description: `${SKIP_DESCRIPTION_PREFIX}${plan.description}`,
+});
