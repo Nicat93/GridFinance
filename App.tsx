@@ -144,14 +144,10 @@ export default function App() {
       return (saved as LanguageCode) || 'en';
   });
 
-  // The viewed cycle is remembered on this device until the cycle that was current when it was saved ends.
+  // The viewed cycle, future or past, is remembered on this device until the person swipes back to today's cycle.
   const savedCycleView = useMemo(() => {
-      try {
-          const saved = parseSavedCycleView(JSON.parse(localStorage.getItem('cycleView') || 'null'));
-          return saved && todayDateOnly() <= saved.until ? saved : null;
-      } catch { return null; }
+      try { return parseSavedCycleView(JSON.parse(localStorage.getItem('cycleView') || 'null')); } catch { return null; }
   }, []);
-  const cycleViewUntil = useRef<string | null>(savedCycleView?.until ?? null);
   const [viewDate, setViewDate] = useState<Date>(() => savedCycleView ? dateOnlyToLocalDate(savedCycleView.start) : new Date());
   const [today, setToday] = useState(() => todayDateOnly());
   // A shifted cycle is a one-cycle, device-local override of the configured start day; it is not synced.
@@ -544,15 +540,8 @@ export default function App() {
 
   const snapshotPeriodStart = formatDateOnly(calculateShiftedBillingPeriod(viewDate, cycleStartDay, cycleShift).start);
   useEffect(() => {
-      if (cycleViewUntil.current && today > cycleViewUntil.current) {
-          cycleViewUntil.current = null;
-          try { localStorage.removeItem('cycleView'); } catch { /* storage unavailable */ }
-          setViewDate(new Date());
-          return;
-      }
       const current = calculateShiftedBillingPeriod(dateOnlyToLocalDate(today), cycleStartDay, cycleShift);
       const saved = nextSavedCycleView(snapshotPeriodStart, current);
-      cycleViewUntil.current = saved?.until ?? null;
       try {
           if (saved) localStorage.setItem('cycleView', JSON.stringify(saved));
           else localStorage.removeItem('cycleView');
