@@ -21,7 +21,7 @@ import { getPlanOccurrencesInRange } from './services/recurrence';
 import { APP_VERSION } from './version';
 import { translations } from './translations';
 import { validateBackup } from './services/backupValidation';
-import { addDateOnly, adjacentPeriodAnchor, calculateBillingPeriod, calculateShiftedBillingPeriod, dateOnlyToLocalDate, parseCycleShiftStart, formatDateOnly, isDateOnlyAfter, todayDateOnly } from './services/dateOnly';
+import { type CycleShift, addDateOnly, adjacentPeriodAnchor, calculateShiftedBillingPeriod, dateOnlyToLocalDate, createCycleShift, parseCycleShift, formatDateOnly, isDateOnlyAfter, todayDateOnly } from './services/dateOnly';
 import { calculateCurrentBalance } from './services/financialState';
 import { calculateProjectedBalance, getApproximateUnpaidExpenseOccurrences } from './services/projectedBalance';
 import { LogicalClock, mergeLocalSnapshots, persistMergedSnapshot, readLocalSnapshot } from './services/localState';
@@ -147,23 +147,20 @@ export default function App() {
   const [viewDate, setViewDate] = useState<Date>(() => new Date());
   const [today, setToday] = useState(() => todayDateOnly());
   // A shifted cycle is a one-cycle, device-local override of the configured start day; it is not synced.
-  const [cycleShiftStart, setCycleShiftStart] = useState<string | null>(() => {
-      try { return parseCycleShiftStart(localStorage.getItem('cycleShiftStart')); } catch { return null; }
+  const [cycleShift, setCycleShift] = useState<CycleShift | null>(() => {
+      try { return parseCycleShift(JSON.parse(localStorage.getItem('cycleShift') || 'null')); } catch { return null; }
   });
   useEffect(() => {
       try {
-          if (cycleShiftStart) localStorage.setItem('cycleShiftStart', cycleShiftStart);
-          else localStorage.removeItem('cycleShiftStart');
+          if (cycleShift) localStorage.setItem('cycleShift', JSON.stringify(cycleShift));
+          else localStorage.removeItem('cycleShift');
       } catch { /* storage unavailable: the shift only lasts for this session */ }
-  }, [cycleShiftStart]);
+  }, [cycleShift]);
   useEffect(() => {
-      if (!cycleShiftStart) return;
-      const shiftedEnd = calculateShiftedBillingPeriod(dateOnlyToLocalDate(cycleShiftStart), cycleStartDay, cycleShiftStart).end;
-      if (today > formatDateOnly(shiftedEnd)) setCycleShiftStart(null);
-  }, [cycleShiftStart, cycleStartDay, today]);
+      if (cycleShift && today > cycleShift.end) setCycleShift(null);
+  }, [cycleShift, today]);
   const shiftCycleTo = (date: Date) => {
-      const value = formatDateOnly(date);
-      setCycleShiftStart(formatDateOnly(calculateBillingPeriod(date, cycleStartDay).start) === value ? null : value);
+      setCycleShift(createCycleShift(date, cycleStartDay, { start: snapshot.periodStart, end: snapshot.periodEnd }));
   };
   useEffect(() => {
       const now = new Date();
@@ -539,7 +536,7 @@ export default function App() {
 
   const snapshot: FinancialSnapshot = useMemo(() => {
     const currentBalance = calculateCurrentBalance(transactions);
-    const { start: periodStart, end: periodEnd } = calculateShiftedBillingPeriod(viewDate, cycleStartDay, cycleShiftStart);
+    const { start: periodStart, end: periodEnd } = calculateShiftedBillingPeriod(viewDate, cycleStartDay, cycleShift);
     const periodStartDate = formatDateOnly(periodStart);
     const periodEndDate = formatDateOnly(periodEnd);
 
@@ -565,7 +562,7 @@ export default function App() {
     });
 
     return { currentBalance, ...calculateProjectedBalance(currentBalance, projectedOccurrences), upcomingIncome, upcomingExpenses, upcomingExpensesMax, periodStart, periodEnd };
-  }, [transactions, plans, cycleStartDay, cycleShiftStart, viewDate, today]);
+  }, [transactions, plans, cycleStartDay, cycleShift, viewDate, today]);
 
   const handleClearDataRequest = () => {
       setIsClearDataConfirmOpen(true);
@@ -617,7 +614,7 @@ export default function App() {
       setCategoryDefs([]); // Reset Categories too
       setLocalResetAt(nextLogicalTime());
       setLocalCycleStartDay(1);
-      setCycleShiftStart(null);
+      setCycleShift(null);
       setSyncConfig(prev => ({ ...prev, lastSyncedAt: 0 }));
       setIsClearDataConfirmOpen(false);
       setClearDataError('');
@@ -754,7 +751,7 @@ export default function App() {
             setTransactions(imported.transactions);
             setPlans(imported.plans);
             setCycleStartDay(imported.cycleStartDay);
-            setCycleShiftStart(null);
+            setCycleShift(null);
             setDeletedIds(imported.deletedIds);
             setTransactionDeletedIds(imported.transactionDeletedIds || {});
             setPlanDeletedIds(imported.planDeletedIds || {});
@@ -799,7 +796,7 @@ export default function App() {
         setPlans([]);
         setDeletedIds({});
         setLocalCycleStartDay(1);
-        setCycleShiftStart(null);
+        setCycleShift(null);
     }
     setSyncConfig(newConfig);
   };
@@ -1036,7 +1033,7 @@ export default function App() {
     const plan = plans.find(p => p.id === planId);
     if (!plan) return;
     const currentPeriodEnd = new Date(snapshot.periodEnd); currentPeriodEnd.setHours(23, 59, 59, 999);
-    const nextPeriodEnd = calculateShiftedBillingPeriod(adjacentPeriodAnchor({ start: snapshot.periodStart, end: snapshot.periodEnd }, 'next'), cycleStartDay, cycleShiftStart).end;
+    const nextPeriodEnd = calculateShiftedBillingPeriod(adjacentPeriodAnchor({ start: snapshot.periodStart, end: snapshot.periodEnd }, 'next'), cycleStartDay, cycleShift).end;
 
     if (newDate > nextPeriodEnd) { alert(`Too far: ${newDate.toLocaleDateString()}`); return; }
     if (newDate > currentPeriodEnd) { setShiftCycleDialog({ isOpen: true, planId, newDate, isPaid, actualAmount }); }
