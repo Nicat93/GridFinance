@@ -144,12 +144,12 @@ test('swiping moves to the adjacent cycle across an early-started cycle', () => 
   assert.equal(span(view(dates.adjacentPeriodAnchor(previous, 'next'))), '2026-10-28..2026-11-30');
 });
 
-test('the viewed cycle is remembered only while it differs from the current one', () => {
+test('any viewed cycle other than the current one is remembered, future or past', () => {
   const current = dates.calculateShiftedBillingPeriod(day('2026-10-28'), 1, null);
-  assert.deepEqual(dates.nextSavedCycleView('2026-11-01', current), { start: '2026-11-01', until: '2026-10-31' });
-  assert.deepEqual(dates.nextSavedCycleView('2026-09-01', current), { start: '2026-09-01', until: '2026-10-31' });
+  assert.deepEqual(dates.nextSavedCycleView('2026-12-01', current), { start: '2026-12-01' });
+  assert.deepEqual(dates.nextSavedCycleView('2026-09-01', current), { start: '2026-09-01' });
   assert.equal(dates.nextSavedCycleView('2026-10-01', current), null);
-  assert.deepEqual(dates.parseSavedCycleView({ start: '2026-11-01', until: '2026-10-31' }), { start: '2026-11-01', until: '2026-10-31' });
-  assert.equal(dates.parseSavedCycleView({ start: 'x', until: '2026-10-31' }), null);
+  assert.deepEqual(dates.parseSavedCycleView({ start: '2026-12-01' }), { start: '2026-12-01' });
+  assert.equal(dates.parseSavedCycleView({ start: 'x' }), null);
   assert.equal(dates.parseSavedCycleView(null), null);
 });

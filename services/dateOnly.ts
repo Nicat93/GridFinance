@@ -143,15 +143,15 @@ export const adjacentPeriodAnchor = (period: { start: Date; end: Date }, directi
   return anchor;
 };
 
-/** The cycle a person last looked at, remembered until the cycle that was current when it was saved ends. */
-export interface SavedCycleView { start: string; until: string }
+/** The cycle a person last looked at, remembered until they swipe back to the current cycle. */
+export interface SavedCycleView { start: string }
 
 export const parseSavedCycleView = (value: unknown): SavedCycleView | null => {
   if (!value || typeof value !== 'object') return null;
-  const { start, until } = value as Record<string, unknown>;
-  return isDateOnlyString(start) && isDateOnlyString(until) ? { start, until } : null;
+  const { start } = value as Record<string, unknown>;
+  return isDateOnlyString(start) ? { start } : null;
 };
 
-/** A viewed cycle other than today's is worth remembering; viewing today's cycle clears the memory. */
+/** Any viewed cycle other than today's, future or past, is worth remembering; viewing today's cycle clears the memory. */
 export const nextSavedCycleView = (viewedStart: string, currentPeriod: { start: Date; end: Date }): SavedCycleView | null =>
-  viewedStart === formatDateOnly(currentPeriod.start) ? null : { start: viewedStart, until: formatDateOnly(currentPeriod.end) };
+  viewedStart === formatDateOnly(currentPeriod.start) ? null : { start: viewedStart };
