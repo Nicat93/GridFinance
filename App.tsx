@@ -17,7 +17,6 @@ import DesignDebugger, { DesignConfig } from './components/DesignDebugger';
 import CategoryManager from './components/CategoryManager';
 import DateRangeModal from './components/DateRangeModal';
 import * as SupabaseService from './services/supabaseService';
-import { getPlanOccurrencesInRange } from './services/recurrence';
 import { APP_VERSION } from './version';
 import { translations } from './translations';
 import { validateBackup } from './services/backupValidation';
@@ -26,7 +25,7 @@ import { calculateCurrentBalance } from './services/financialState';
 import { calculateProjectedBalance, getApproximateUnpaidExpenseOccurrences } from './services/projectedBalance';
 import { LogicalClock, mergeLocalSnapshots, persistMergedSnapshot, readLocalSnapshot } from './services/localState';
 import { evaluateArithmetic } from './services/safeArithmetic';
-import { createAppliedTransaction, createExactTransactionFromPlan, createPlannedPlan, createSkippedTransaction } from './services/plannedPayments';
+import { createAppliedTransaction, createExactTransactionFromPlan, createPartialTransaction, createPlannedPlan, createSkippedTransaction, getPlanRemaining, getPlanSpent, getProjectedPlanOccurrences } from './services/plannedPayments';
 import { SyncWorkTracker } from './services/syncWorkTracker';
 
 // --- Utility Functions ---
@@ -198,6 +197,7 @@ export default function App() {
   });
 
   const [shiftCycleDialog, setShiftCycleDialog] = useState<{ isOpen: boolean, planId: string, newDate: Date, isPaid: boolean, actualAmount?: number } | null>(null);
+  const [pendingSpendPlanId, setPendingSpendPlanId] = useState<string | null>(null);
   const [pendingActualAmount, setPendingActualAmount] = useState<{ planId: string, date: Date, isPaid: boolean, fromTransition?: boolean } | null>(null);
   const [transitionState, setTransitionState] = useState<{ isOpen: boolean, targetDate: Date, pendingItems: { plan: RecurringPlan, due: Date }[] } | null>(null);
   const [isClearDataConfirmOpen, setIsClearDataConfirmOpen] = useState(false);
@@ -548,6 +548,12 @@ export default function App() {
       } catch { /* storage unavailable: the view only lasts for this session */ }
   }, [snapshotPeriodStart, today, cycleStartDay, cycleShift]);
 
+  const planSpentById = useMemo(() => {
+    const spent: Record<string, number> = {};
+    plans.forEach(plan => { const amount = getPlanSpent(plan, transactions); if (amount > 0) spent[plan.id] = amount; });
+    return spent;
+  }, [plans, transactions]);
+
   const snapshot: FinancialSnapshot = useMemo(() => {
     const currentBalance = calculateCurrentBalance(transactions);
     const { start: periodStart, end: periodEnd } = calculateShiftedBillingPeriod(viewDate, cycleStartDay, cycleShift);
@@ -559,12 +565,13 @@ export default function App() {
     let upcomingExpensesMax = 0;
     const projectedOccurrences: { amount: number; type: 'income' | 'expense'; approximateUpperAmount?: number }[] = [];
 
-    plans.forEach(plan => getPlanOccurrencesInRange(plan, periodStartDate, periodEndDate).forEach(() => {
-        projectedOccurrences.push({ amount: plan.amount, type: plan.type, approximateUpperAmount: plan.approximateUpperAmount });
-        if (plan.type === 'income') upcomingIncome += plan.amount;
+    // Partial spends already reduced Current; only what is left of the next occurrence is still upcoming.
+    plans.forEach(plan => getProjectedPlanOccurrences(plan, periodStartDate, periodEndDate, planSpentById[plan.id]).forEach(({ amount, type, approximateUpperAmount }) => {
+        projectedOccurrences.push({ amount, type, approximateUpperAmount });
+        if (type === 'income') upcomingIncome += amount;
         else {
-            upcomingExpenses += plan.amount;
-            upcomingExpensesMax += plan.approximateUpperAmount ?? plan.amount;
+            upcomingExpenses += amount;
+            upcomingExpensesMax += approximateUpperAmount ?? amount;
         }
     }));
 
@@ -576,7 +583,7 @@ export default function App() {
     });
 
     return { currentBalance, ...calculateProjectedBalance(currentBalance, projectedOccurrences), upcomingIncome, upcomingExpenses, upcomingExpensesMax, periodStart, periodEnd };
-  }, [transactions, plans, cycleStartDay, cycleShift, viewDate, today]);
+  }, [transactions, plans, planSpentById, cycleStartDay, cycleShift, viewDate, today]);
 
   const handleClearDataRequest = () => {
       setIsClearDataConfirmOpen(true);
@@ -945,7 +952,9 @@ export default function App() {
     const now = nextLogicalTime();
     const dateStr = applyDate.getFullYear() + '-' + String(applyDate.getMonth() + 1).padStart(2, '0') + '-' + String(applyDate.getDate()).padStart(2, '0');
 
-    const newTx = asSkip ? createSkippedTransaction(plan, dateStr, now) : createAppliedTransaction(plan, dateStr, isPaid, now, now, actualAmount);
+    const spent = planSpentById[planId];
+    const finalAmount = actualAmount ?? (spent ? getPlanRemaining(plan, spent).amount : plan.amount);
+    const newTx = asSkip ? createSkippedTransaction(plan, dateStr, now) : createAppliedTransaction(plan, dateStr, isPaid, now, now, finalAmount);
     setTransactions(prev => [newTx, ...prev]);
 
     if (plan.frequency === Frequency.ONE_TIME) {
@@ -1085,6 +1094,25 @@ export default function App() {
     }
   };
 
+  const handleSpendAmount = (value: string): boolean => {
+    const plan = plans.find(p => p.id === pendingSpendPlanId);
+    if (!plan) { setPendingSpendPlanId(null); return true; }
+    try {
+      const amount = evaluateArithmetic(value);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        alert('Enter a valid positive amount.');
+        return false;
+      }
+      const now = nextLogicalTime();
+      setTransactions(prev => [createPartialTransaction(plan, { id: generateId(), date: todayDateOnly(), amount, now }), ...prev]);
+      setPendingSpendPlanId(null);
+      return true;
+    } catch {
+      alert('Enter a valid positive amount.');
+      return false;
+    }
+  };
+
   const handleApplyPlanNow = (planId: string) => {
     const plan = plans.find(p => p.id === planId);
     if (!plan) return;
@@ -1149,6 +1177,8 @@ export default function App() {
                     onEdit={(p) => { setEditingItem(p); setIsModalOpen(true); }}
                     onApplyNow={handleApplyPlanNow}
                     onSkip={handleSkipPlan}
+                    onSpend={setPendingSpendPlanId}
+                    spentById={planSpentById}
                     currentPeriodEnd={snapshot.periodEnd}
                     filterText={filterText}
                     sortOption={sortOption}
@@ -1222,10 +1252,22 @@ export default function App() {
       />
       <CalculatorSheet
         isOpen={!!pendingActualAmount}
-        initialValue={String(plans.find(plan => plan.id === pendingActualAmount?.planId)?.amount ?? '')}
+        initialValue={(() => {
+          const plan = plans.find(p => p.id === pendingActualAmount?.planId);
+          if (!plan) return '';
+          const spent = planSpentById[plan.id];
+          return String(spent ? getPlanRemaining(plan, spent).amount : plan.amount);
+        })()}
         onClose={() => setPendingActualAmount(null)}
         onApply={handleActualAmount}
         calculatorLabel={t.actualAmount}
+      />
+      <CalculatorSheet
+        isOpen={!!pendingSpendPlanId}
+        initialValue=""
+        onClose={() => setPendingSpendPlanId(null)}
+        onApply={handleSpendAmount}
+        calculatorLabel={`${t.spend} · ${plans.find(p => p.id === pendingSpendPlanId)?.description ?? ''}`}
       />
       <SettingsModal
         isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} isDarkMode={isDarkMode} onToggleTheme={() => setIsDarkMode(!isDarkMode)}

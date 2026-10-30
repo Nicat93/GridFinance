@@ -4,7 +4,8 @@ import React, { useState, useMemo } from 'react';
 import { RecurringPlan, Frequency, SortOption, CategoryDef, LanguageCode } from '../types';
 import { DesignConfig } from './DesignDebugger';
 import { translations } from '../translations';
-import { formatTransactionAmount } from '../services/presentation';
+import { formatMoney, formatTransactionAmount } from '../services/presentation';
+import { getPlanRemaining } from '../services/plannedPayments';
 import { handleExpandableRowKeyboardActivation } from '../services/keyboardAccessibility';
 import { addDateOnly, dateOnlyToLocalDate, formatDateOnly } from '../services/dateOnly';
 
@@ -13,6 +14,9 @@ interface Props {
   onDelete: (id: string) => void;
   onApplyNow: (planId: string) => void;
   onSkip: (planId: string) => void;
+  onSpend: (planId: string) => void;
+  /** Amount already spent against each plan's next occurrence, keyed by plan ID (absent when nothing spent) */
+  spentById: Record<string, number>;
   onEdit: (plan: RecurringPlan) => void;
   currentPeriodEnd: Date;
   filterText: string;
@@ -35,7 +39,7 @@ const addTimeLocal = (date: string | Date, freq: Frequency, count: number): Date
 
 // --- Component ---
 const PlanList: React.FC<Props> = ({ 
-    plans, onDelete, onApplyNow, onSkip, onEdit,
+    plans, onDelete, onApplyNow, onSkip, onSpend, spentById, onEdit,
     currentPeriodEnd, filterText, sortOption, designConfig, categories,
     startDate, endDate, language
 }) => {
@@ -120,6 +124,7 @@ const PlanList: React.FC<Props> = ({
   const handleConfirmDelete = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); onDelete(id); setConfirmDeleteId(null); };
   const handleCancelDelete = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(null); };
   const handleSkip = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); onSkip(id); };
+  const handleSpend = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); onSpend(id); };
   const handleApply = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); onApplyNow(id); };
   const handleEdit = (e: React.MouseEvent, plan: RecurringPlan) => { e.preventDefault(); e.stopPropagation(); onEdit(plan); };
   const toggleRow = (id: string) => { setExpandedId(prev => prev === id ? null : id); setConfirmDeleteId(null); };
@@ -222,6 +227,14 @@ const PlanList: React.FC<Props> = ({
                         if (isLate) markColor = 'bg-rose-500'; 
                         else if (isUpcomingInPeriod) markColor = 'bg-orange-500';
 
+                        const spent = spentById[plan.id];
+                        const remaining = spent ? getPlanRemaining(plan, spent) : undefined;
+                        const spentScale = plan.approximateUpperAmount ?? plan.amount;
+                        const spentPercent = spent && spentScale > 0 ? Math.min((spent / spentScale) * 100, 100) : 100;
+                        const minTickPercent = plan.approximateUpperAmount !== undefined && plan.approximateUpperAmount > 0
+                            ? (plan.amount / plan.approximateUpperAmount) * 100
+                            : undefined;
+
                         const progressPercent = plan.maxOccurrences 
                             ? Math.min((plan.occurrencesGenerated / plan.maxOccurrences) * 100, 100) 
                             : 0;
@@ -242,7 +255,7 @@ const PlanList: React.FC<Props> = ({
                                 >
                                     {/* Left: Indicator & Description */}
                                     <div className="px-2 flex-1 min-w-0 flex items-center gap-2 self-start">
-                                        <div className={`w-1 h-3 rounded-full shrink-0 mt-0.5 transition-colors ${showMark ? markColor : 'bg-transparent'}`}></div>
+                                        <div className={`w-1 h-3 rounded-full shrink-0 mt-0.5 transition-colors ${remaining ? 'bg-orange-500' : showMark ? markColor : 'bg-transparent'}`}></div>
                                         
                                         <div className="flex-1 min-w-0">
                                             <div 
@@ -255,7 +268,7 @@ const PlanList: React.FC<Props> = ({
                                     </div>
 
                                     {/* Right: Tags, Date, Amount */}
-                                    <div className="px-2 shrink-0 flex items-center justify-end gap-1.5 sm:gap-2 text-right">
+                                    <div className={`px-2 shrink-0 flex justify-end gap-1.5 sm:gap-2 text-right ${remaining ? 'items-start' : 'items-center'}`}>
                                         {/* Tag Pills */}
                                         {plan.tags && plan.tags.length > 0 && (
                                             <div className="flex gap-1 overflow-hidden max-w-[80px] sm:max-w-[120px]">
@@ -289,12 +302,25 @@ const PlanList: React.FC<Props> = ({
                                         </span>
                                         
                                         {/* Amount */}
-                                        <span 
-                                            className={`whitespace-nowrap min-w-[45px] ${plan.type === 'income' ? 'text-emerald-500 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
-                                            style={amountStyle}
-                                        >
-                                            {formatTransactionAmount(plan.type, plan.amount, plan.approximateUpperAmount)}
-                                        </span>
+                                        {remaining ? (
+                                            <span className="whitespace-nowrap min-w-[45px] flex flex-col items-end">
+                                                <span className="text-orange-500 dark:text-orange-400 font-bold" style={amountStyle}>
+                                                    {formatTransactionAmount(plan.type, remaining.amount, remaining.approximateUpperAmount)}
+                                                </span>
+                                                <span className="text-[9px] leading-none mt-0.5 text-gray-400 dark:text-gray-500">
+                                                    {plan.approximateUpperAmount !== undefined && plan.approximateUpperAmount !== plan.amount
+                                                        ? `${formatMoney(plan.amount)} – ${formatMoney(plan.approximateUpperAmount)}`
+                                                        : formatMoney(plan.amount)}
+                                                </span>
+                                            </span>
+                                        ) : (
+                                            <span
+                                                className={`whitespace-nowrap min-w-[45px] ${plan.type === 'income' ? 'text-emerald-500 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
+                                                style={amountStyle}
+                                            >
+                                                {formatTransactionAmount(plan.type, plan.amount, plan.approximateUpperAmount)}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
 
@@ -316,6 +342,18 @@ const PlanList: React.FC<Props> = ({
                                             </div>
                                         )}
 
+                                        {spent !== undefined && (
+                                            <div className="flex items-center gap-2 text-[9px] sm:text-[10px]">
+                                                <span className="font-mono">{t.spent} {formatMoney(spent)}</span>
+                                                <div className="relative flex-1 h-1.5 bg-gray-200 dark:bg-gray-800 rounded max-w-[140px]">
+                                                    <div className="h-full bg-orange-500 rounded" style={{ width: `${spentPercent}%` }}></div>
+                                                    {minTickPercent !== undefined && minTickPercent < 100 && (
+                                                        <div className="absolute -top-0.5 h-2.5 w-px bg-gray-500 dark:bg-gray-300" style={{ left: `${minTickPercent}%` }}></div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <div className="flex gap-2 pt-1 border-t border-gray-200 dark:border-gray-800/50 mt-1 relative z-10">
                                             {isDeleting ? (
                                                 <>
@@ -326,7 +364,8 @@ const PlanList: React.FC<Props> = ({
                                             ) : (
                                                 <>
                                                     <button onClick={(e) => handleApply(e, plan.id)} disabled={!canApply} className={`flex-1 py-1.5 rounded text-[10px] sm:text-xs font-bold ${canApply ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/60' : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed'}`}>{isMaxed ? t.completed : t.applyNow}</button>
-                                                    <button onClick={(e) => handleSkip(e, plan.id)} disabled={isMaxed} className="px-4 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 py-1.5 rounded text-[10px] sm:text-xs font-bold hover:bg-amber-200 dark:hover:bg-amber-900/50 disabled:opacity-40 disabled:cursor-not-allowed">{t.skipPlan}</button>
+                                                    <button onClick={(e) => handleSpend(e, plan.id)} disabled={isMaxed} className="flex-1 bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 py-1.5 rounded text-[10px] sm:text-xs font-bold hover:bg-sky-200 dark:hover:bg-sky-900/60 disabled:opacity-40 disabled:cursor-not-allowed">{t.spend}</button>
+                                                    <button onClick={(e) => handleSkip(e, plan.id)} disabled={isMaxed} className="px-4 bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 py-1.5 rounded text-[10px] sm:text-xs font-bold hover:bg-orange-200 dark:hover:bg-orange-900/60 disabled:opacity-40 disabled:cursor-not-allowed">{t.skipPlan}</button>
                                                     <button onClick={(e) => handleEdit(e, plan)} className="px-4 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-1.5 rounded text-[10px] sm:text-xs hover:bg-gray-300 dark:hover:bg-gray-700">{t.edit}</button>
                                                     <button onClick={(e) => handleDeleteClick(e, plan.id)} className="px-4 bg-gray-200 dark:bg-gray-800 text-red-600 dark:text-red-400 py-1.5 rounded text-[10px] sm:text-xs hover:bg-red-100 dark:hover:bg-red-900/30">{t.del}</button>
                                                 </>

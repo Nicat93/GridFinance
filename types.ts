@@ -42,6 +42,10 @@ export interface Transaction {
   isPaid: boolean;
   /** Links this transaction to a RecurringPlan if generated from one */
   relatedPlanId?: string;
+  /** Plan this transaction was partially spent from ("Spend"), without consuming the occurrence */
+  partialPlanId?: string;
+  /** Due date (YYYY-MM-DD) of the plan occurrence the partial spend counts against */
+  partialDueDate?: string;
   /** Timestamp of creation for stable sorting */
   createdAt: number;
   /** Timestamp for sync conflict resolution (Last-Write-Wins) */
