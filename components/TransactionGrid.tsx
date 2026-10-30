@@ -5,7 +5,7 @@ import { Transaction, SortOption, CategoryDef, LanguageCode } from '../types';
 import { DesignConfig } from './DesignDebugger';
 import { translations } from '../translations';
 import { getPaidVisualState } from '../services/financialState';
-import { formatTransactionAmount, getHistoryEmptyState } from '../services/presentation';
+import { formatTransactionAmount, getHistoryEmptyState, getRowActionGroupStyle, getRowTapX } from '../services/presentation';
 import { handleExpandableRowKeyboardActivation } from '../services/keyboardAccessibility';
 
 interface Props {
@@ -32,6 +32,7 @@ const TransactionGrid: React.FC<Props> = ({
     startDate, endDate, language, today, onAddEntry
 }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [tapX, setTapX] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [renderLimit, setRenderLimit] = useState(PAGE_SIZE);
   const t = translations[language];
@@ -145,7 +146,7 @@ const TransactionGrid: React.FC<Props> = ({
   const handleConfirmDelete = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); onDelete(id); setConfirmDeleteId(null); };
   const handleCancelDelete = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(null); };
   const handleEdit = (e: React.MouseEvent, tx: Transaction) => { e.preventDefault(); e.stopPropagation(); onEdit(tx); };
-  const toggleRow = (id: string) => { setExpandedId(prev => prev === id ? null : id); setConfirmDeleteId(null); };
+  const toggleRow = (id: string, x: number | null = null) => { setExpandedId(prev => prev === id ? null : id); setConfirmDeleteId(null); setTapX(x); };
   const handleShowMore = () => setRenderLimit(prev => prev + PAGE_SIZE);
 
   // Dynamic Styles from Design Config
@@ -209,7 +210,7 @@ const TransactionGrid: React.FC<Props> = ({
                                 onKeyDown={(e) => handleExpandableRowKeyboardActivation(e, () => toggleRow(tx.id))}
                                 className={`flex items-center cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 ${isExpanded ? 'bg-gray-50 dark:bg-gray-900/40 items-start' : ''}`}
                                 style={rowStyle}
-                                onClick={() => toggleRow(tx.id)}
+                                onClick={(e) => toggleRow(tx.id, getRowTapX(e))}
                             >
                                 {/* Left: Description */}
                                 <div className="px-2 flex-1 min-w-0">
@@ -267,19 +268,21 @@ const TransactionGrid: React.FC<Props> = ({
                                     onClick={(e) => e.stopPropagation()}
                                 >
                                     {/* Action Buttons */}
-                                    <div className="flex gap-2 pt-1 border-t border-gray-200 dark:border-gray-800/50 mt-1 relative z-10">
+                                    <div className="pt-1 border-t border-gray-200 dark:border-gray-800/50 mt-1 relative z-10">
+                                    <div className="flex gap-2" style={getRowActionGroupStyle(isDeleting ? 3 : 2, tapX)}>
                                         {isDeleting ? (
                                             <>
-                                                <div className="flex-1 flex items-center justify-center text-red-500 dark:text-red-400 font-bold uppercase tracking-wider text-[10px]">{t.sure}</div>
-                                                <button onClick={(e) => handleConfirmDelete(e, tx.id)} className="bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-200 px-4 py-1.5 rounded text-[10px] sm:text-xs">{t.yes}</button>
-                                                <button onClick={handleCancelDelete} className="bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-1.5 rounded text-[10px] sm:text-xs">{t.no}</button>
+                                                <div className="flex-1 basis-0 min-h-11 flex items-center justify-center text-red-500 dark:text-red-400 font-bold uppercase tracking-wider text-[10px]">{t.sure}</div>
+                                                <button onClick={(e) => handleConfirmDelete(e, tx.id)} className="flex-1 basis-0 min-h-11 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-200 py-1.5 rounded text-[10px] sm:text-xs">{t.yes}</button>
+                                                <button onClick={handleCancelDelete} className="flex-1 basis-0 min-h-11 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-1.5 rounded text-[10px] sm:text-xs">{t.no}</button>
                                             </>
                                         ) : (
                                             <>
-                                                <button onClick={(e) => handleEdit(e, tx)} className="flex-1 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-1.5 rounded text-[10px] sm:text-xs hover:bg-gray-300 dark:hover:bg-gray-700">{t.edit}</button>
-                                                <button onClick={(e) => handleDeleteClick(e, tx.id)} className="flex-1 bg-gray-200 dark:bg-gray-800 text-red-600 dark:text-red-400 py-1.5 rounded text-[10px] sm:text-xs hover:bg-red-100 dark:hover:bg-red-900/30">{t.delete}</button>
+                                                <button onClick={(e) => handleEdit(e, tx)} className="flex-1 basis-0 min-h-11 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-1.5 rounded text-[10px] sm:text-xs hover:bg-gray-300 dark:hover:bg-gray-700">{t.edit}</button>
+                                                <button onClick={(e) => handleDeleteClick(e, tx.id)} className="flex-1 basis-0 min-h-11 bg-gray-200 dark:bg-gray-800 text-red-600 dark:text-red-400 py-1.5 rounded text-[10px] sm:text-xs hover:bg-red-100 dark:hover:bg-red-900/30">{t.delete}</button>
                                             </>
                                         )}
+                                    </div>
                                     </div>
                                 </div>
                             )}

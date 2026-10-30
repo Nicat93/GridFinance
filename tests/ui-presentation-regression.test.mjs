@@ -28,7 +28,7 @@ const loadTypeScript = (relativePath) => {
   return loaded.exports;
 };
 
-const { formatMoney, formatTransactionAmount, getHistoryEmptyState, getCycleSwipeDirection } = loadTypeScript('services/presentation.ts');
+const { formatMoney, formatTransactionAmount, getHistoryEmptyState, getCycleSwipeDirection, getRowActionGroupStyle, getRowTapX } = loadTypeScript('services/presentation.ts');
 const { handleExpandableRowKeyboardActivation } = loadTypeScript('services/keyboardAccessibility.ts');
 
 test('summary formatting preserves exact cents and large digits for normal and large balances', () => {
@@ -122,6 +122,14 @@ test('plan Skip and Delete live in the plan edit window; History edits and plan 
   // Plan rows render their actions only when expanded, so check the row source keeps just Apply · Spend · Edit.
   const planListSource = readFileSync(path.resolve('components/PlanList.tsx'), 'utf8');
   assert.doesNotMatch(planListSource, /t\.skipPlan|t\.del\b/);
+});
+
+test('expanded-row actions keep a fixed width and centre on the tap, clamped inside the row', () => {
+  // Three 96px buttons with 8px gaps form a 304px group; centring on x=500 starts it at 348px.
+  assert.deepEqual(getRowActionGroupStyle(3, 500), { width: 'min(100%, 304px)', marginLeft: 'clamp(0px, 348px, 100% - min(100%, 304px))' });
+  assert.deepEqual(getRowActionGroupStyle(2, 10), { width: 'min(100%, 200px)', marginLeft: 'clamp(0px, -90px, 100% - min(100%, 200px))' }, 'a tap near the left edge clamps to 0');
+  assert.deepEqual(getRowActionGroupStyle(3, null), {}, 'keyboard-opened rows keep the full-width layout');
+  assert.equal(getRowTapX({ clientX: 130, currentTarget: { getBoundingClientRect: () => ({ left: 20 }) } }), 102, 'tap is measured inside the px-2 panel inset');
 });
 
 test('cycle swipe needs a clear horizontal gesture: left is next, right is previous', () => {

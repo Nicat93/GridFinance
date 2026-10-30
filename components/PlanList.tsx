@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { RecurringPlan, Frequency, SortOption, CategoryDef, LanguageCode } from '../types';
 import { DesignConfig } from './DesignDebugger';
 import { translations } from '../translations';
-import { formatMoney, formatTransactionAmount } from '../services/presentation';
+import { formatMoney, formatTransactionAmount, getRowActionGroupStyle, getRowTapX } from '../services/presentation';
 import { getPlanRemaining } from '../services/plannedPayments';
 import { handleExpandableRowKeyboardActivation } from '../services/keyboardAccessibility';
 import { addDateOnly, dateOnlyToLocalDate, formatDateOnly } from '../services/dateOnly';
@@ -42,6 +42,7 @@ const PlanList: React.FC<Props> = ({
     startDate, endDate, language
 }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [tapX, setTapX] = useState<number | null>(null);
   const [renderLimit, setRenderLimit] = useState(PAGE_SIZE);
   const t = translations[language];
 
@@ -120,7 +121,7 @@ const PlanList: React.FC<Props> = ({
   const handleSpend = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); onSpend(id); };
   const handleApply = (e: React.MouseEvent, id: string) => { e.preventDefault(); e.stopPropagation(); onApplyNow(id); };
   const handleEdit = (e: React.MouseEvent, plan: RecurringPlan) => { e.preventDefault(); e.stopPropagation(); onEdit(plan); };
-  const toggleRow = (id: string) => { setExpandedId(prev => prev === id ? null : id); };
+  const toggleRow = (id: string, x: number | null = null) => { setExpandedId(prev => prev === id ? null : id); setTapX(x); };
   const handleShowMore = () => setRenderLimit(prev => prev + PAGE_SIZE);
 
   const formatShortDate = (date: Date) => {
@@ -243,7 +244,7 @@ const PlanList: React.FC<Props> = ({
                                     onKeyDown={(e) => handleExpandableRowKeyboardActivation(e, () => toggleRow(plan.id))}
                                     className={`flex items-center cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 ${isExpanded ? 'bg-gray-50 dark:bg-gray-900/40 items-start' : ''}`}
                                     style={rowStyle}
-                                    onClick={() => toggleRow(plan.id)}
+                                    onClick={(e) => toggleRow(plan.id, getRowTapX(e))}
                                 >
                                     {/* Left: Indicator & Description */}
                                     <div className="px-2 flex-1 min-w-0 flex items-center gap-2 self-start">
@@ -346,10 +347,12 @@ const PlanList: React.FC<Props> = ({
                                             </div>
                                         )}
 
-                                        <div className="flex gap-2 pt-1 border-t border-gray-200 dark:border-gray-800/50 mt-1 relative z-10">
-                                            <button onClick={(e) => handleApply(e, plan.id)} disabled={!canApply} className={`flex-1 py-1.5 rounded text-[10px] sm:text-xs font-bold ${canApply ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/60' : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed'}`}>{isMaxed ? t.completed : t.applyNow}</button>
-                                            <button onClick={(e) => handleSpend(e, plan.id)} disabled={isMaxed} className="flex-1 bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 py-1.5 rounded text-[10px] sm:text-xs font-bold hover:bg-sky-200 dark:hover:bg-sky-900/60 disabled:opacity-40 disabled:cursor-not-allowed">{t.spend}</button>
-                                            <button onClick={(e) => handleEdit(e, plan)} className="px-4 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-1.5 rounded text-[10px] sm:text-xs hover:bg-gray-300 dark:hover:bg-gray-700">{t.edit}</button>
+                                        <div className="pt-1 border-t border-gray-200 dark:border-gray-800/50 mt-1 relative z-10">
+                                        <div className="flex gap-2" style={getRowActionGroupStyle(3, tapX)}>
+                                            <button onClick={(e) => handleApply(e, plan.id)} disabled={!canApply} className={`flex-1 basis-0 min-h-11 py-1.5 rounded text-[10px] sm:text-xs font-bold ${canApply ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/60' : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed'}`}>{isMaxed ? t.completed : t.applyNow}</button>
+                                            <button onClick={(e) => handleSpend(e, plan.id)} disabled={isMaxed} className="flex-1 basis-0 min-h-11 bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 py-1.5 rounded text-[10px] sm:text-xs font-bold hover:bg-sky-200 dark:hover:bg-sky-900/60 disabled:opacity-40 disabled:cursor-not-allowed">{t.spend}</button>
+                                            <button onClick={(e) => handleEdit(e, plan)} className="flex-1 basis-0 min-h-11 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-1.5 rounded text-[10px] sm:text-xs hover:bg-gray-300 dark:hover:bg-gray-700">{t.edit}</button>
+                                        </div>
                                         </div>
                                     </div>
                                 )}
