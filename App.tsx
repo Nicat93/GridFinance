@@ -1173,10 +1173,8 @@ export default function App() {
                 </div>
                 {showPlanned && <PlanList
                     plans={plans}
-                    onDelete={deletePlan}
                     onEdit={(p) => { setEditingItem(p); setIsModalOpen(true); }}
                     onApplyNow={handleApplyPlanNow}
-                    onSkip={handleSkipPlan}
                     onSpend={setPendingSpendPlanId}
                     spentById={planSpentById}
                     currentPeriodEnd={snapshot.periodEnd}
@@ -1249,6 +1247,7 @@ export default function App() {
       )}
       <AddTransactionModal
         isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingItem(null); }} onSave={handleSaveData} initialData={editingItem} categories={categoryDefs} language={language}
+        onSkipPlan={handleSkipPlan} onDeletePlan={deletePlan}
       />
       <CalculatorSheet
         isOpen={!!pendingActualAmount}

@@ -103,6 +103,27 @@ test('Max calculator is hidden for actual expenses and shown for planned expense
   assert.match(plannedHtml, /aria-label="Max: not set" aria-haspopup="dialog"/);
 });
 
+test('plan Skip and Delete live in the plan edit window; History edits and plan rows do not show them', () => {
+  const React = require('react');
+  const { renderToStaticMarkup } = require('react-dom/server');
+  const { default: AddTransactionModal } = loadTypeScript('components/AddTransactionModal.tsx');
+  const plan = { id: 'plan', description: 'Plan', amount: 50, type: 'expense', frequency: 'Monthly', startDate: '2026-09-30', occurrencesGenerated: 0, tags: [], createdAt: 1 };
+  const modal = (initialData) => renderToStaticMarkup(React.createElement(AddTransactionModal, {
+    isOpen: true, onClose: () => {}, onSave: () => {}, categories: [], language: 'en', initialData,
+    onSkipPlan: () => {}, onDeletePlan: () => {},
+  }));
+  const planHtml = modal(plan);
+  assert.match(planHtml, />Skip<\/button>/);
+  assert.match(planHtml, />Delete<\/button>/);
+  assert.match(modal({ ...plan, maxOccurrences: 1, occurrencesGenerated: 1 }), /<button type="button" disabled=""[^>]*>Skip<\/button>/, 'a finished plan cannot be skipped');
+  const historyHtml = modal({ id: 'tx', date: '2026-09-30', description: 'Tx', amount: 5, type: 'expense', tags: [], isPaid: true, createdAt: 1 });
+  assert.doesNotMatch(historyHtml, />Skip<\/button>|>Delete<\/button>/);
+
+  // Plan rows render their actions only when expanded, so check the row source keeps just Apply · Spend · Edit.
+  const planListSource = readFileSync(path.resolve('components/PlanList.tsx'), 'utf8');
+  assert.doesNotMatch(planListSource, /t\.skipPlan|t\.del\b/);
+});
+
 test('cycle swipe needs a clear horizontal gesture: left is next, right is previous', () => {
   assert.equal(getCycleSwipeDirection(-80, 5), 'next');
   assert.equal(getCycleSwipeDirection(80, -10), 'previous');

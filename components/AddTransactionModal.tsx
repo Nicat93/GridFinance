@@ -11,6 +11,9 @@ interface Props {
   initialData?: Transaction | RecurringPlan | null;
   categories: CategoryDef[];
   language: LanguageCode;
+  /** Plan-only actions shown under Update when editing a plan */
+  onSkipPlan?: (planId: string) => void;
+  onDeletePlan?: (planId: string) => void;
 }
 
 const KNOWN_COLORS = ['slate', 'gray', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
@@ -25,7 +28,8 @@ const pickColorForString = (str: string): string => {
     return KNOWN_COLORS[index];
 };
 
-const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initialData, categories, language }) => {
+const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initialData, categories, language, onSkipPlan, onDeletePlan }) => {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [type, setType] = useState<TransactionType>('expense');
   const [amount, setAmount] = useState('');
   const [approximateUpperAmount, setApproximateUpperAmount] = useState('');
@@ -56,6 +60,8 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   const tagContainerRef = useRef<HTMLDivElement>(null);
   
   const t = translations[language];
+  const editingPlan = initialData && 'frequency' in initialData ? initialData : null;
+  const isEditingPlanMaxed = !!editingPlan?.maxOccurrences && editingPlan.occurrencesGenerated >= editingPlan.maxOccurrences;
 
   useEffect(() => {
     const previousTarget = previousCalcTarget.current;
@@ -71,6 +77,7 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   }, [calcTarget]);
 
   useEffect(() => {
+    setConfirmDelete(false);
     if (isOpen) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -514,6 +521,22 @@ const AddTransactionModal: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                 >
                     {initialData ? t.update : (isRecurring ? t.createPlan : t.addTransaction)}
                 </button>
+                {editingPlan && onSkipPlan && onDeletePlan && (
+                    <div className="flex gap-2 mt-2">
+                        {confirmDelete ? (
+                            <>
+                                <div className="flex-1 flex items-center justify-center text-red-500 dark:text-red-400 font-bold uppercase tracking-wider text-xs">{t.sure}</div>
+                                <button type="button" onClick={() => { onDeletePlan(editingPlan.id); onClose(); }} className="px-5 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-200 py-2.5 rounded-lg text-sm font-bold">{t.yes}</button>
+                                <button type="button" onClick={() => setConfirmDelete(false)} className="px-5 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-2.5 rounded-lg text-sm">{t.no}</button>
+                            </>
+                        ) : (
+                            <>
+                                <button type="button" onClick={() => { onSkipPlan(editingPlan.id); onClose(); }} disabled={isEditingPlanMaxed} className="flex-1 bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/60 py-2.5 rounded-lg font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed">{t.skipPlan}</button>
+                                <button type="button" onClick={() => setConfirmDelete(true)} className="flex-1 bg-gray-200 dark:bg-gray-800 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 py-2.5 rounded-lg font-bold text-sm">{t.delete}</button>
+                            </>
+                        )}
+                    </div>
+                )}
             </div>
 
             </form>
