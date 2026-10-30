@@ -272,14 +272,14 @@ const TransactionGrid: React.FC<Props> = ({
                                     <div className="flex gap-2" style={getRowActionGroupStyle(isDeleting ? 3 : 2, tapX)}>
                                         {isDeleting ? (
                                             <>
-                                                <div className="flex-1 basis-0 min-h-11 flex items-center justify-center text-red-500 dark:text-red-400 font-bold uppercase tracking-wider text-[10px]">{t.sure}</div>
-                                                <button onClick={(e) => handleConfirmDelete(e, tx.id)} className="flex-1 basis-0 min-h-11 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-200 py-1.5 rounded text-[10px] sm:text-xs">{t.yes}</button>
-                                                <button onClick={handleCancelDelete} className="flex-1 basis-0 min-h-11 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-1.5 rounded text-[10px] sm:text-xs">{t.no}</button>
+                                                <div className="flex-1 basis-0 min-h-[26px] tracking-tight flex items-center justify-center text-red-500 dark:text-red-400 font-bold uppercase text-[9px] leading-none text-center">{t.sure}</div>
+                                                <button onClick={(e) => handleConfirmDelete(e, tx.id)} className="flex-1 basis-0 min-h-[26px] tracking-tight bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-200 py-1 rounded text-[10px]">{t.yes}</button>
+                                                <button onClick={handleCancelDelete} className="flex-1 basis-0 min-h-[26px] tracking-tight bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-1 rounded text-[10px]">{t.no}</button>
                                             </>
                                         ) : (
                                             <>
-                                                <button onClick={(e) => handleEdit(e, tx)} className="flex-1 basis-0 min-h-11 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-1.5 rounded text-[10px] sm:text-xs hover:bg-gray-300 dark:hover:bg-gray-700">{t.edit}</button>
-                                                <button onClick={(e) => handleDeleteClick(e, tx.id)} className="flex-1 basis-0 min-h-11 bg-gray-200 dark:bg-gray-800 text-red-600 dark:text-red-400 py-1.5 rounded text-[10px] sm:text-xs hover:bg-red-100 dark:hover:bg-red-900/30">{t.delete}</button>
+                                                <button onClick={(e) => handleEdit(e, tx)} className="flex-1 basis-0 min-h-[26px] tracking-tight bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-1 rounded text-[10px] hover:bg-gray-300 dark:hover:bg-gray-700">{t.edit}</button>
+                                                <button onClick={(e) => handleDeleteClick(e, tx.id)} className="flex-1 basis-0 min-h-[26px] tracking-tight bg-gray-200 dark:bg-gray-800 text-red-600 dark:text-red-400 py-1 rounded text-[10px] hover:bg-red-100 dark:hover:bg-red-900/30">{t.delete}</button>
                                             </>
                                         )}
                                     </div>

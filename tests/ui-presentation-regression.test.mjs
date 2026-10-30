@@ -125,9 +125,9 @@ test('plan Skip and Delete live in the plan edit window; History edits and plan 
 });
 
 test('expanded-row actions keep a fixed width and centre on the tap, clamped inside the row', () => {
-  // Three 96px buttons with 8px gaps form a 304px group; centring on x=500 starts it at 348px.
-  assert.deepEqual(getRowActionGroupStyle(3, 500), { width: 'min(100%, 304px)', marginLeft: 'clamp(0px, 348px, 100% - min(100%, 304px))' });
-  assert.deepEqual(getRowActionGroupStyle(2, 10), { width: 'min(100%, 200px)', marginLeft: 'clamp(0px, -90px, 100% - min(100%, 200px))' }, 'a tap near the left edge clamps to 0');
+  // Three 58px buttons with 8px gaps form a 190px group; centring on x=500 starts it at 405px.
+  assert.deepEqual(getRowActionGroupStyle(3, 500), { width: 'min(100%, 190px)', marginLeft: 'clamp(0px, 405px, 100% - min(100%, 190px))' });
+  assert.deepEqual(getRowActionGroupStyle(2, 10), { width: 'min(100%, 124px)', marginLeft: 'clamp(0px, -52px, 100% - min(100%, 124px))' }, 'a tap near the left edge clamps to 0');
   assert.deepEqual(getRowActionGroupStyle(3, null), {}, 'keyboard-opened rows keep the full-width layout');
   assert.equal(getRowTapX({ clientX: 130, currentTarget: { getBoundingClientRect: () => ({ left: 20 }) } }), 102, 'tap is measured inside the px-2 panel inset');
 });

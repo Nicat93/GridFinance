@@ -33,7 +33,7 @@ export const getCycleSwipeDirection = (dx: number, dy: number, threshold = 40): 
 };
 
 /** Fixed width of one expanded-row action button; buttons shrink equally only when the row is narrower. */
-export const ROW_ACTION_WIDTH_PX = 96;
+export const ROW_ACTION_WIDTH_PX = 58;
 const ROW_ACTION_GAP_PX = 8;
 
 /**
