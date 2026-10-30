@@ -101,5 +101,5 @@ Read this before making changes to synchronization, persistence, importing, recu
 - Read this file before relevant work; current code wins if it becomes stale.
 - Verify an old audit finding still exists before fixing it. Preserve these invariants unless asked to change them.
 - Prefer targeted regression tests. Run relevant tests, `npm run build`, and `git diff --check`.
-- Avoid broad or unrelated refactors. Do not commit or push unless requested.
+- Avoid broad or unrelated refactors. Commit and push finished, verified work directly to `main`.
 - Update this handoff when work materially changes architecture, sync, financial-date, persistence, security behavior, or known limitations.
