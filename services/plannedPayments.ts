@@ -1,5 +1,6 @@
 import { Frequency, RecurringPlan, Transaction } from '../types';
-import { getRecurringOccurrenceId } from './recurrence';
+import { getPlanOccurrencesInRange, getRecurringOccurrenceId } from './recurrence';
+import { addDateOnly } from './dateOnly';
 
 /** Approximate amounts describe plans for expenses, never actual transactions or income. */
 export const getPlannedApproximateAmount = (
@@ -79,3 +80,59 @@ export const createSkippedTransaction = (plan: RecurringPlan, date: string, now:
   ...createAppliedTransaction(plan, date, true, now, now, 0),
   description: `${SKIP_DESCRIPTION_PREFIX}${plan.description}`,
 });
+
+/** Due date of the plan's next unapplied occurrence. */
+export const getPlanNextDueDate = (plan: RecurringPlan): string =>
+  addDateOnly(plan.startDate, plan.frequency, plan.occurrencesGenerated);
+
+/**
+ * "Spend" records part of a planned occurrence as its own paid transaction. It gets a random ID and no
+ * relatedPlanId, so the plan does not advance and deleting it needs no plan rollback; the amount spent is derived
+ * from these transactions for the occurrence they name, so it resets when the plan advances.
+ */
+export const createPartialTransaction = (
+  plan: RecurringPlan,
+  input: { id: string; date: string; amount: number; now: number },
+): Transaction => {
+  if (!Number.isFinite(input.amount) || input.amount < 0) throw new Error('Invalid partial amount');
+  return {
+    id: input.id,
+    date: input.date,
+    description: plan.description,
+    amount: input.amount,
+    type: plan.type,
+    tags: plan.tags,
+    isPaid: true,
+    partialPlanId: plan.id,
+    partialDueDate: getPlanNextDueDate(plan),
+    createdAt: input.now,
+    lastModified: input.now,
+  };
+};
+
+/** Amount already spent against the plan's next occurrence. */
+export const getPlanSpent = (plan: RecurringPlan, transactions: Transaction[]): number => {
+  const dueDate = getPlanNextDueDate(plan);
+  return transactions.reduce((sum, transaction) =>
+    transaction.partialPlanId === plan.id && transaction.partialDueDate === dueDate ? sum + transaction.amount : sum, 0);
+};
+
+/** What is left of the next occurrence after partial spends; overspending floors at zero. */
+export const getPlanRemaining = (plan: RecurringPlan, spent: number): { amount: number; approximateUpperAmount?: number } => ({
+  amount: Math.max(0, plan.amount - spent),
+  ...(plan.approximateUpperAmount === undefined ? {} : { approximateUpperAmount: Math.max(0, plan.approximateUpperAmount - spent) }),
+});
+
+/** Plan occurrences in an inclusive date range; the next occurrence projects only what partial spends left of it. */
+export const getProjectedPlanOccurrences = (
+  plan: RecurringPlan,
+  start: string,
+  end: string,
+  spent?: number,
+): { date: string; amount: number; type: 'income' | 'expense'; approximateUpperAmount?: number }[] => {
+  const nextDueDate = getPlanNextDueDate(plan);
+  return getPlanOccurrencesInRange(plan, start, end).map(date => {
+    const { amount, approximateUpperAmount } = spent && date === nextDueDate ? getPlanRemaining(plan, spent) : plan;
+    return { date, amount, type: plan.type, ...(approximateUpperAmount === undefined ? {} : { approximateUpperAmount }) };
+  });
+};

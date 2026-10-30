@@ -65,11 +65,15 @@ export function validateBackup(input: unknown, now = Date.now()): ValidatedBacku
         !validAmount(raw.amount) || !validType(raw.type) || !validApproximateUpperAmount(raw) || !validTags(migrateTags(raw)) ||
         (raw.isPaid !== undefined && typeof raw.isPaid !== 'boolean') ||
         (raw.relatedPlanId !== undefined && !isId(raw.relatedPlanId)) ||
+        (raw.partialPlanId !== undefined && !isId(raw.partialPlanId)) ||
+        (raw.partialDueDate !== undefined && !isDate(raw.partialDueDate)) ||
+        ((raw.partialPlanId === undefined) !== (raw.partialDueDate === undefined)) ||
         !validOptionalTimestamp(raw, 'lastModified')) return invalid();
     return {
       id: raw.id, date: raw.date, description: migrateDescription(raw) as string, amount: raw.amount,
       type: raw.type, tags: migrateTags(raw) as string[], isPaid: raw.isPaid ?? false,
       ...(raw.relatedPlanId === undefined ? {} : { relatedPlanId: raw.relatedPlanId }),
+      ...(raw.partialPlanId === undefined ? {} : { partialPlanId: raw.partialPlanId, partialDueDate: raw.partialDueDate }),
       ...(raw.approximateUpperAmount === undefined ? {} : { approximateUpperAmount: raw.approximateUpperAmount }),
       createdAt: migrateCreatedAt(raw, now),
       ...(raw.lastModified === undefined ? {} : { lastModified: raw.lastModified }),
